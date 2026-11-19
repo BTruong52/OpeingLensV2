@@ -1,0 +1,20 @@
+{
+  "name": "opening-lens",
+  "version": "2.0.0",
+  "productName": "Opening Lens",
+  "private": true,
+  "description": "A local chess study overlay for Windows",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/core.test.cjs",
+    "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/app.js"
+  },
+  "dependencies": {
+    "chess.js": "1.4.0",
+    "tesseract.js": "7.0.0"
+  },
+  "devDependencies": {
+    "electron": "45.3.3"
+  }
+}

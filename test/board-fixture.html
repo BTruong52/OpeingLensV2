@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;overflow:hidden;background:#fff}canvas{width:320px;height:320px}</style></head><body><canvas width="640" height="640"></canvas><script>
+const c=document.querySelector('canvas'),ctx=c.getContext('2d');
+let ranks=['♜♞♝♛♚♝♞♜','♟♟♟♟♟♟♟♟','        ','        ','        ','        ','♙♙♙♙♙♙♙♙','♖♘♗♕♔♗♘♖'];
+function draw(){for(let y=0;y<8;y++)for(let x=0;x<8;x++){ctx.fillStyle=(x+y)%2?'#739552':'#ebecd0';ctx.fillRect(x*80,y*80,80,80);ctx.font='66px Segoe UI Symbol';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#111';ctx.fillText(ranks[y][x],x*80+40,y*80+42);}}
+window.playE4=()=>{ranks[6]='♙♙♙♙ ♙♙♙';ranks[4]='    ♙   ';draw();};draw();
+window.showFen=(fen,flipped=false)=>{
+  const pieces=Object.fromEntries(Array.from('rnbqkpRNBQKP',(p,i)=>[p,'♜♞♝♛♚♟♖♘♗♕♔♙'[i]]));
+  ranks=fen.split(' ')[0].split('/').map(rank=>Array.from(rank,p=>pieces[p]||' '.repeat(Number(p))).join(''));
+  if(flipped) ranks=ranks.reverse().map(rank=>Array.from(rank).reverse().join(''));
+  draw();
+};
+</script></body></html>

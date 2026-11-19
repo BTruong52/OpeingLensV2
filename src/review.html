@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"><title>Confirm board and move panel</title><link rel="stylesheet" href="review.css"></head>
+<body>
+  <img id="snapshot" alt="" draggable="false">
+  <div id="stage">
+    <div id="board" class="crop board" tabindex="0" aria-label="Chessboard crop"><span>Chessboard</span><div class="handle" aria-hidden="true"></div></div>
+    <div id="moves" class="crop moves" tabindex="0" aria-label="Move panel crop" hidden><span>Move panel</span><div class="handle" aria-hidden="true"></div></div>
+  </div>
+  <header><strong>Review capture areas</strong><p id="hint" role="status">Drag either box to move it, or drag its bottom-right handle to resize.</p>
+    <div><button id="draw-board">Redraw board</button><button id="draw-moves">Draw move panel</button><button id="skip-moves">Skip move panel</button><button id="cancel">Cancel</button><button id="confirm">Confirm &amp; calibrate</button></div>
+  </header>
+  <script src="review.js"></script>
+</body></html>

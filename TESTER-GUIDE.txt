@@ -1,0 +1,49 @@
+OpeingLensV2 - WINDOWS TEST BUILD (2.0.0)
+
+START HERE
+Extract the ENTIRE ZIP, then open OpeingLensV2.exe inside the extracted folder.
+Keep all files together. Windows 10 (2004+) or Windows 11, x64.
+No Node.js, installer, browser extension, or admin access required.
+This is an unsigned portable test build.
+
+QUICK TEST
+1. Open a chess analysis board or bot practice game.
+2. Click Auto-find board & calibrate. Adjust and confirm the board and Moves
+   panel boxes. Manual selection is available if detection fails.
+3. Check that Playing as matches your bottom pieces. Test White AND Black.
+   Pick a skill level and one of the three suggested openings/defenses.
+4. The floating Coach and arrows should appear automatically. An empty move
+   panel at the starting position should not block the first recommendation.
+5. Play several moves, including captures. Check that the board preview,
+   position, Coach text and arrows stay synchronized. Try a slow piece drag.
+6. Try an unexpected reply: look for optional variation switches or position
+   plans. Confirm that arrows match the board orientation.
+7. Reset for new game: the selected opening stays, the move-panel crop clears,
+   and the board crop stays. Select the move panel again if using it.
+8. Discord: open Streaming > Discord > Open Stream View. Share the window
+   called Opening Lens Stream View in Discord. Keep it on another monitor
+   or outside the board and Moves panel crops. Check that viewers see the
+   board, arrows and current Coach explanation. Tracking must be running.
+   Stream View shows the board and coaching, not the entire game interface.
+
+REPORTING A BUG
+Before reproducing: expand Developer Mode near the bottom and enable it.
+After the problem: choose Last failure to see what OLens captured and read.
+Click Export diagnostics and send that JSON with:
+- Windows version, chess site/app, and monitor scaling (100%, 125%, etc.).
+- Whether playing White or Black, skill level and selected opening.
+- Moves played and steps needed to reproduce the issue.
+- What you expected versus what happened; include the displayed status.
+- For streaming issues: Discord share source and what viewers actually saw.
+Review exported images before sharing; do not send tokens or account details.
+Developer Mode starts off each session and may add overhead while recording.
+
+KNOWN LIMITS
+Recognition varies with board themes, small text, piece icons, scrolling and
+animations. Ambiguous positions may wait for confirmation. Keep capture
+areas unobstructed. Calibration and streaming need testing on your setup.
+Lichess online continuations are optional and require your own token; core
+catalog, OCR and Coach work offline. Use coaching where assistance is allowed.
+
+Third-party notices ship with the app. Stockfish.js licensing and source
+information are in resources/app/engine.
