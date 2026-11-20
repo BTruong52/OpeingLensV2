@@ -14,6 +14,18 @@ const { panelNearBoard } = require('../src/region-review.cjs');
 const {moveGridText}=require('../src/move-layout.cjs');
 const {verifyBoardPosition}=require('../src/vision.js');
 const diagnostics=require('../src/diagnostics.cjs');
+test('confirmed anchor ignores damaged old rows but still rejects a new missing row',()=>{
+  const anchor='N1b1k2r/ppQp1ppp/2n5/2B3P1/5P2/P4K2/5p1P/q4B1R w - - 4 25';
+  const lines=parseRows('11. cxd6 c6\n13. Nxf3 exf3\n25. W xc8+ ds',true,anchor);
+  assert.ok(lines.some(line=>line.moves.map(move=>move.san).join(' ')==='Qxc8+ Nd8'));
+  assert.throws(()=>parseRows('25. Qxc8+ Nd8\n27. h3',true,anchor),/skipped/);
+});
+test('pawn capture OCR retains a legal c/e alternative for board confirmation',()=>{
+  const anchor='rnbqkbnr/pp4pp/2p1pp2/3P4/3P4/4P3/PP1N1PPP/R1BQKBNR b KQkq - 0 5';
+  const lines=parseRows('5... exd5\n6. h4',true,anchor);
+  assert.deepEqual(new Set(lines.map(line=>line.moves.map(move=>move.san).join(' '))),new Set(['exd5 h4','cxd5 h4']));
+  assert.equal(parseRows('5... exd5\n6. h4',false,anchor).length,1);
+});
 
 test('auto-find proposes the panel around a unique Moves heading beside the board',()=>{
   const board={x:20,y:35,size:350};

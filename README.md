@@ -1,12 +1,12 @@
-# OpeingLensV2
+# OpeingLensV3
 
-Opening Lens v2.0.0: a Windows chess opening coach with on-board arrows, automatic screen calibration, move-panel recognition, skill-based opening suggestions, and a floating Coach.
+Opening Lens v3.0.0: a Windows chess opening coach with on-board arrows, automatic screen calibration, move-panel recognition, skill-based opening suggestions, and a floating Coach.
 
 ## Download for Windows
 
-**[Download the latest tester build](../../releases/latest)**. In Assets, choose `OpeingLensV2-Windows-x64.zip`.
+**[Download the latest tester build](../../releases/latest)**. In Assets, choose `OpeingLensV3-Windows-x64.zip`.
 
-Extract the **entire ZIP** and run **OpeingLensV2.exe**. No Node.js or installation is required for the portable build. Read `READ FIRST.txt` inside the download. Windows 10 (2004+) / Windows 11 x64; unsigned test build.
+Extract the **entire ZIP** and run **OpeingLensV3.exe**. No Node.js or installation is required for the portable build. Read `READ FIRST.txt` inside the download. Windows 10 (2004+) / Windows 11 x64; unsigned test build.
 
 For Discord, open **Streaming > Discord > Open Stream View** and share the **Opening Lens Stream View** window. Place it outside the captured board and move panel, preferably on a second monitor.
 

@@ -33,7 +33,7 @@ function inferMove(fen, changed, candidatesOnly=false) {
 function positionKey(fen) { return fen.split(' ').slice(0, 4).join(' '); }
 // Recover only a unique position reachable in at most two legal half-moves.
 // Separate textured piece squares from the background before checking paths.
-function recoverMoves(fen,scores) {
+function recoverMoves(fen,scores,candidatesOnly=false) {
   if(!Array.isArray(scores) || scores.length!==64 || !scores.every(Number.isFinite))return null;
   const ranked=scores.map((score,i)=>({score,i})).sort((a,b)=>b.score-a.score);
   const masks=new Set(), bits=Array(64).fill('0');
@@ -53,7 +53,7 @@ function recoverMoves(fen,scores) {
     consider([first]);
     for(const second of new Chess(first.after).moves({verbose:true}))consider([first,second]);
   }
-  return paths.size===1 ? paths.values().next().value : null;
+  return candidatesOnly ? [...paths.values()] : paths.size===1 ? paths.values().next().value : null;
 }
 function gamePositions(pgn) {
   const game = new Chess();

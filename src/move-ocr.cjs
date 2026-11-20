@@ -3,7 +3,7 @@ const {Chess}=require('chess.js');
 const {moveGridText}=require('./move-layout.cjs');
 let worker;
 
-function splitRows(text,flexible){
+function splitRows(text,flexible,anchor){
   // Read sequentially numbered rows. Do not silently skip missing plies.
   let cleaned=text.normalize('NFD').replace(/\p{M}/gu,'').replace(/[♔♚]/g,'K').replace(/[♕♛]/g,'Q').replace(/[♖♜]/g,'R')
     .replace(/[♗♝]/g,'B').replace(/[♘♞]/g,'N').replace(/[!?]/g,'')
@@ -20,7 +20,14 @@ function splitRows(text,flexible){
   // Compact PGN lists can put several numbered moves on one visual line.
   cleaned=cleaned.replace(/(\S)[ \t]+(?=\d{1,3}\.[ \t]*[a-hKQRBNO])/g,'$1\n');
   // OCR sometimes drops the file in a pawn move, leaving only a digit.
-  const rows=[...cleaned.matchAll(/^[ \t]*(\d{1,3})(?:[.)]{1,3}[ \t]*(?=[a-hxKQRBNO~])|[ \t]+(?=(?:[KQRBN]?[a-h][a-h1-8]?x?[a-h]?[1-8][a-h1-8qrbn=+#]*|x[a-h][1-8][+#]?|O-O(?:-O)?|~[1-8])(?:\s|$)))([^\r\n]*)/gm)];
+  let rows=[...cleaned.matchAll(/^[ \t]*(\d{1,3})(?:[.)]{1,3}[ \t]*(?=[a-hxKQRBNO~])|[ \t]+(?=(?:[KQRBN]?[a-h][a-h1-8]?x?[a-h]?[1-8][a-h1-8qrbn=+#]*|x[a-h][1-8][+#]?|O-O(?:-O)?|~[1-8])(?:\s|$)))([^\r\n]*)/gm)];
+  // An established position already confirms older moves. Scrolled history
+  // above that row must not veto new moves because an old number is damaged.
+  if(anchor){
+    const number=new Chess(anchor).moveNumber();
+    const start=rows.findIndex(row=>Number(row[1])===number);
+    if(start>=0)rows=rows.slice(start);
+  }
   if(!rows.length)throw Error('No numbered move rows found. Select just the move area.');
   const first=Number(rows[0][1]);
   const firstBlack=/^[ \t]*\d+\.{3}/.test(rows[0][0]);
@@ -49,7 +56,7 @@ function parseMoveText(text){
   return parseRows(text,false)[0];
 }
 function parseRows(text,flexible,anchor){
-  const {first,firstBlack,moves}=splitRows(text,flexible);
+  const {first,firstBlack,moves}=splitRows(text,flexible,anchor);
   if(first===1 && !anchor && !firstBlack)return replay(moves,flexible);
   if(!anchor)throw Error('The move list must show move 1 for initial calibration.');
   const board=new Chess(anchor);
@@ -82,6 +89,14 @@ function replay(tokens,allowUnclearRank,initial=new Chess().fen()){
       try {
         const move=coordinates.test(token)?board.move({from:token.slice(0,2),to:token.slice(2,4),promotion:token[4]}):board.move(token,{strict:true});
         const choices=[move];
+        // Small c/e glyphs are easily confused in pawn captures. Even when
+        // the printed source file forms a legal move, retain other legal
+        // pawn captures to that destination for the board to disambiguate.
+        if(allowUnclearRank && /^[a-h]x[a-h][1-8][+#]?$/.test(token)){
+          choices.push(...new Chess(move.before).moves({verbose:true}).filter(other=>other.piece==='p' && other.captured &&
+            other.to===move.to && !other.promotion && other.san!==move.san &&
+            (!/[+#]$/.test(token) || other.san.endsWith(token.at(-1)))));
+        }
         // A hidden piece icon can make a legal knight move look like a
         // legal pawn move. Earlier icon moves also need alternatives when
         // calibrating after more moves have been played.

@@ -729,7 +729,19 @@ async function moveListLoop(token,sample=window.lens.trackingFrame,read=window.l
             matched={image,signature:current,frameId:frame.id,boardVerified:true,detected:move.san};
           }
         }else{
-          matched=await matchScreenList(token,anchor=>read(anchor,frame.id,false),true,{image});
+          // Opponent and user can both move between samples. Recover a unique
+          // short legal path from occupancy, then require strict piece evidence.
+          const recoveryScores=image.map(energy);
+          const recoveryCandidates=baseline?await window.lens.chess('recover-candidates',{fen,scores:flipped?recoveryScores.reverse():recoveryScores}):null;
+          if(!running || token!==epoch)return;
+          const supportedPaths=(recoveryCandidates || []).filter(path=>verifyTrackedBoard(baseline,image,fen,path.at(-1).after,flipped,{boardRecovery:true}));
+          const recovered=supportedPaths.length===1?supportedPaths[0]:null;
+          if(recovered?.length){
+            for(const played of recovered)followMove(played,false);
+            const detected=recovered.map(played=>played.san).join(' → ');
+            window.lensDebug.record('Board-only recovery',{frameId:frame.id,moves:recovered.map(played=>played.san),fen,reason:'Unique legal path supported by stable board shapes.'});
+            matched={image,signature:current,frameId:frame.id,boardVerified:true,detected};
+          }else matched=await matchScreenList(token,anchor=>read(anchor,frame.id,false),true,{image});
         }
         if(!running || token!==epoch || !matched)return;
         if(matched.frameId!==undefined)await window.lens.confirmTrackingFrame(matched.frameId);

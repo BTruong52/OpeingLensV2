@@ -1,7 +1,7 @@
-OpeingLensV2 - WINDOWS TEST BUILD (2.0.0)
+OpeingLensV3 - WINDOWS TEST BUILD (3.0.0)
 
 START HERE
-Extract the ENTIRE ZIP, then open OpeingLensV2.exe inside the extracted folder.
+Extract the ENTIRE ZIP, then open OpeingLensV3.exe inside the extracted folder.
 Keep all files together. Windows 10 (2004+) or Windows 11, x64.
 No Node.js, installer, browser extension, or admin access required.
 This is an unsigned portable test build.
@@ -47,3 +47,9 @@ catalog, OCR and Coach work offline. Use coaching where assistance is allowed.
 
 Third-party notices ship with the app. Stockfish.js licensing and source
 information are in resources/app/engine.
+
+V3 REGRESSION CHECKS
+Try two moves between confirmations, pawn captures such as cxd5 versus exd5,
+and a scrolling late-game move list. Older OCR errors should not block new
+moves once the current position is confirmed. Recovery still requires a
+unique legal position supported by piece shapes.

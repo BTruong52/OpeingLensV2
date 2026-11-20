@@ -600,6 +600,7 @@ ipcMain.handle('chess', (event, action, data) => {
   if (action === 'infer') return core.inferMove(data.fen, data.changed);
   if (action === 'board-candidates') return core.inferMove(data.fen,data.changed,true);
   if (action === 'recover') return core.recoverMoves(data.fen,data.scores);
+  if (action === 'recover-candidates') return core.recoverMoves(data.fen,data.scores,true);
   if (action === 'pgn') return core.gamePositions(data);
   throw Error('Unknown action.');
 });
