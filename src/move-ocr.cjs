@@ -135,11 +135,11 @@ async function getWorker(){
   }
   return worker;
 }
-async function findPanelWords(png){
+async function findPanelWords(png,{sparse=true}={}){
   const {PSM}=require('tesseract.js');
   const engine=await getWorker();
   try {
-    await engine.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
+    await engine.setParameters({tessedit_pageseg_mode:sparse?PSM.SPARSE_TEXT:PSM.SINGLE_BLOCK});
     const {data}=await engine.recognize(png,{}, {blocks:true});
     return (data.blocks||[]).flatMap(block=>block.paragraphs.flatMap(p=>p.lines.flatMap(line=>line.words)));
   } finally {

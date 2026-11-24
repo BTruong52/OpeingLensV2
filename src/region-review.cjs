@@ -36,9 +36,9 @@ function panelNearBoard(board,headings,width,height,pixel){
 // panels. Require SAN beside the number, never a player rating or clock.
 function panelFromRows(board,words,width,height,pixel){
   const candidates=[];
-  const san=/^(?:[KQRBN])?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?$|^[O0]-[O0](?:-[O0])?[+#]?$/;
+  const san=/^(?:[KQRBN])?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?$|^[O0]-[O0](?:-[O0])?[+#]?$|^[#£~?][1-8][+#]?$/;
   for(const word of words){
-    if(!/^\d{1,3}[.)]?$/.test(word.text.trim()))continue;
+    if(!/^\d{1,3}[.)]?$/.test(word.text.trim().replace(/[,;:]$/,'.')))continue;
     const box=word.bbox,cy=(box.y0+box.y1)/2;
     if(cy<board.y || cy>board.y+board.height*.92 || box.x0>board.x && box.x0<board.x+board.size)continue;
     const side=box.x0>=board.x+board.size?'right':'left';
@@ -76,4 +76,19 @@ function panelFromRows(board,words,width,height,pixel){
   if(right-left<85 || bottom-y<30)return null;
   return {x:left,y,width:right-left,height:Math.round(bottom-y)};
 }
-module.exports={panelNearBoard,panelFromRows};
+async function panelWordsNearBoard(image,board,recognize,prepare){
+  const {width,height}=image.getSize(),words=[];
+  // Large piece artwork distorts Tesseract's font-size estimate. Search the
+  // side bands directly, where numbered move rows actually live.
+  const y=Math.max(0,Math.floor(board.y)),bottom=Math.min(height,Math.ceil(board.y+board.height));
+  const bands=[{x:0,width:Math.floor(board.x)},{x:Math.ceil(board.x+board.size),width:width-Math.ceil(board.x+board.size)}];
+  for(const band of bands){
+    if(band.width<85 || bottom<=y)continue;
+    const crop=image.crop({...band,y,height:bottom-y});
+    const png=prepare?.(crop) || crop.resize({width:band.width*2}).toPNG();
+    const found=await recognize(png);
+    for(const word of found)words.push({...word,bbox:{x0:word.bbox.x0/2+band.x,x1:word.bbox.x1/2+band.x,y0:word.bbox.y0/2+y,y1:word.bbox.y1/2+y}});
+  }
+  return words;
+}
+module.exports={panelNearBoard,panelFromRows,panelWordsNearBoard};

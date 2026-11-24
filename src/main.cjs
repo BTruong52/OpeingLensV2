@@ -8,13 +8,13 @@ const { Worker } = require('node:worker_threads');
 const { fetchMasters } = require('./explorer.cjs');
 const { coachPosition } = require('./coach.cjs');
 const { readMoveImage, findMovesHeading, findPanelWords } = require('./move-ocr.cjs');
-const {darkPanelVariant}=require('./panel-image.cjs');
+const {darkPanelVariant,panelDetectionImage}=require('./panel-image.cjs');
 const {changedMoveRows}=require('./move-panel-crop.cjs');
 const diagnostics=require('./diagnostics.cjs');
 const startedAt=new Date().toISOString();
 process.on('uncaughtExceptionMonitor',error=>diagnostics.record('Main-process exception',
   {message:error.message,stack:error.stack},true));
-const { panelNearBoard, panelFromRows } = require('./region-review.cjs');
+const { panelNearBoard, panelFromRows, panelWordsNearBoard } = require('./region-review.cjs');
 const { createHash } = require('node:crypto');
 const { answerCoach } = require('./coach-chat.cjs');
 const adminMode=process.argv.includes('--admin');
@@ -339,7 +339,7 @@ async function findCaptureRegions(){
     const {display,image,rect,pixel,width,height,scaleX,scaleY,region}=candidate;
     let moves;
     try {
-      const words=await findPanelWords(image.toPNG());
+      const words=await panelWordsNearBoard(image,rect,png=>findPanelWords(png,{sparse:false}),panelDetectionImage);
       const headings=words.filter(word=>/^moves:?$/i.test(word.text.trim())).map(word=>word.bbox);
       const guess=panelFromRows(rect,words,width,height,pixel) || panelNearBoard(rect,headings,width,height,pixel);
       diagnostics.record('Auto-detection',{board:region,headings,numberedWords:words.filter(w=>/^\d+[.)]?$/.test(w.text.trim())),movePanel:guess || null});

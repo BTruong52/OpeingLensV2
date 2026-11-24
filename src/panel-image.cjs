@@ -39,4 +39,17 @@ function withoutMoveTimes(png,words){
   }
   return nativeImage.createFromBitmap(bytes,{width,height}).toPNG();
 }
-module.exports={darkPanelVariant,withoutMoveTimes};
+function panelDetectionImage(image){
+  const {width,height}=image.getSize(),pixels=image.toBitmap();
+  const gray=i=>(pixels[i]+pixels[i+1]+pixels[i+2])/3;
+  const samples=Array.from({length:49},(_,i)=>gray((Math.floor((Math.floor(i/7)+.5)*height/7)*width+Math.floor((i%7+.5)*width/7))*4)).sort((a,b)=>a-b);
+  const dark=samples[24]<130,threshold=dark?Math.max(90,samples[24]+45):samples[24]-45;
+  const output=Buffer.alloc(width*height*16,255);
+  for(let y=0;y<height*2;y++)for(let x=0;x<width*2;x++){
+    const value=gray((Math.floor(y/2)*width+Math.floor(x/2))*4);
+    const ink=dark?value>threshold:value<threshold,i=(y*width*2+x)*4;
+    output[i]=output[i+1]=output[i+2]=ink?0:255;
+  }
+  return nativeImage.createFromBitmap(output,{width:width*2,height:height*2}).toPNG();
+}
+module.exports={darkPanelVariant,withoutMoveTimes,panelDetectionImage};
