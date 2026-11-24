@@ -2,7 +2,7 @@ module.exports=async({panel,js,wait})=>{
   const assert=require('node:assert/strict');
   const fs=require('node:fs/promises'),path=require('node:path');
   const {dialog}=require('electron');
-  assert.equal((await js('window.lens.diagnosticsSnapshot()')).enabled,false);
+  assert.equal((await js('window.lens.diagnosticsSnapshot()')).enabled,true);
   await js('pause(); $("developer-mode").open=true; $("debug-enabled").checked=true; $("debug-enabled").dispatchEvent(new Event("change"))');
   assert.equal((await js('window.lens.diagnosticsSnapshot()')).enabled,true);
   await js('window.lens.diagnosticsState({...window.lensDebug.stateProvider(),onlineToken:"diagnostic-secret-marker"})');
@@ -45,7 +45,7 @@ module.exports=async({panel,js,wait})=>{
     const exported=await js('window.lens.diagnosticsExport()');
     assert.equal(exported.path,destination);
     const raw=await fs.readFile(destination,'utf8'),report=JSON.parse(raw);
-    assert.equal(report.schemaVersion,1);
+    assert.equal(report.schemaVersion,2);
     assert.ok(report.runtime.electron);
     assert.ok(report.failure.captures.panel.startsWith('data:image/png;base64,'));
     assert.equal(raw.includes('diagnostic-secret-marker'),false);

@@ -1,7 +1,7 @@
-OpeingLensV3 - WINDOWS TEST BUILD (3.0.0)
+OpeingLensV4 - WINDOWS TEST BUILD (4.0.0)
 
 START HERE
-Extract the ENTIRE ZIP, then open OpeingLensV3.exe inside the extracted folder.
+Extract the ENTIRE ZIP, then open OpeingLensV4.exe inside the extracted folder.
 Keep all files together. Windows 10 (2004+) or Windows 11, x64.
 No Node.js, installer, browser extension, or admin access required.
 This is an unsigned portable test build.
@@ -20,14 +20,17 @@ QUICK TEST
    plans. Confirm that arrows match the board orientation.
 7. Reset for new game: the selected opening stays, the move-panel crop clears,
    and the board crop stays. Select the move panel again if using it.
-8. Discord: open Streaming > Discord > Open Stream View. Share the window
-   called Opening Lens Stream View in Discord. Keep it on another monitor
-   or outside the board and Moves panel crops. Check that viewers see the
-   board, arrows and current Coach explanation. Tracking must be running.
-   Stream View shows the board and coaching, not the entire game interface.
+8. Discord: share the desktop screen/monitor containing the game and Coach.
+   Check that viewers see the on-board arrows and Coach. Sharing only the game
+   window does not capture separate overlays. There is no Stream View tab.
+9. Try a couple of moves quickly. OLens should catch up from the board or
+   move-panel rows and keep retrying instead of permanently stopping.
+10. Check the arrow legend: green recommended; blue defensive/development
+    alternative; orange forcing/attacking alternative; gold dashed idea;
+    red dashed review of a move to avoid.
 
 REPORTING A BUG
-Before reproducing: expand Developer Mode near the bottom and enable it.
+Diagnostics record automatically. Expand Developer Mode to inspect them.
 After the problem: choose Last failure to see what OLens captured and read.
 Click Export diagnostics and send that JSON with:
 - Windows version, chess site/app, and monitor scaling (100%, 125%, etc.).
@@ -36,20 +39,31 @@ Click Export diagnostics and send that JSON with:
 - What you expected versus what happened; include the displayed status.
 - For streaming issues: Discord share source and what viewers actually saw.
 Review exported images before sharing; do not send tokens or account details.
-Developer Mode starts off each session and may add overhead while recording.
+The export includes selected crop images, OCR inputs/confidence, legal replay,
+board-match evidence, recent failures, timing, monitor scaling and runtime
+details. Tokens are not included. Recording can be disabled.
 
 KNOWN LIMITS
 Recognition varies with board themes, small text, piece icons, scrolling and
-animations. Ambiguous positions may wait for confirmation. Keep capture
-areas unobstructed. Calibration and streaming need testing on your setup.
+animations. Ambiguous positions may wait for confirmation. Keep the game window restored and the newest move rows visible.
+Moving/resizing the game requires reselecting its crop. Calibration and streaming need testing on your setup.
 Lichess online continuations are optional and require your own token; core
 catalog, OCR and Coach work offline. Use coaching where assistance is allowed.
 
 Third-party notices ship with the app. Stockfish.js licensing and source
 information are in resources/app/engine.
 
-V3 REGRESSION CHECKS
+TRACKING REGRESSION CHECKS
 Try two moves between confirmations, pawn captures such as cxd5 versus exd5,
 and a scrolling late-game move list. Older OCR errors should not block new
 moves once the current position is confirmed. Recovery still requires a
 unique legal position supported by piece shapes.
+
+LOCAL LEARNING / ADMIN EDITIONS
+In the ZIP: OpeingLensV4.exe opens the learning edition.
+Opening Lens (Admin).cmd opens continuous coaching.
+For source development: Launch.cmd / Launch Admin.cmd. In the learning edition, finish the guided setup, try the final
+transition recommendation, and confirm that subsequent moves show no new
+move arrows. The Coach should retain the plan summary. Reset starts again.
+On-board bubbles show a quick reason. The floating Coach contains the longer
+explanation. Test the bubble visibility checkbox and both board orientations.

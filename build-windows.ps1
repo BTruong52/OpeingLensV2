@@ -30,6 +30,8 @@ foreach ($entry in $lock.packages.GetEnumerator()) {
   Copy-Item -LiteralPath (Join-Path $root $entry.Key) -Destination $target -Recurse
 }
 Copy-Item -LiteralPath (Join-Path $root 'TESTER-GUIDE.txt') -Destination (Join-Path $bundle 'READ FIRST.txt')
+$adminLauncher = "@echo off`r`nstart `"`" `"%~dp0$exeName`" --admin`r`n"
+Set-Content -LiteralPath (Join-Path $bundle 'Opening Lens (Admin).cmd') -Value $adminLauncher -Encoding ascii
 $log = Join-Path $stage 'release-check.txt'
 $err = Join-Path $stage 'release-check-errors.txt'
 $check = Start-Process -FilePath (Join-Path $bundle $exeName) -ArgumentList @('--release-check',('--user-data-dir="' + (Join-Path $stage 'profile') + '"')) -RedirectStandardOutput $log -RedirectStandardError $err -WindowStyle Hidden -PassThru

@@ -1,0 +1,65 @@
+module.exports=async({app,panel,getOverlay})=>{
+  const assert=require('node:assert/strict'),path=require('node:path');
+  const fs=require('node:fs/promises');
+  const {BrowserWindow,screen}=require('electron');
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  panel.webContents.on('console-message',event=>{if(event.level==='error')console.error(event.message);});
+  const js=async code=>{try{return await panel.webContents.executeJavaScript(code);}catch(error){throw Error('Learning test failed: '+code.slice(0,120),{cause:error});}};
+  for(let i=0;i<100 && !(await js('Boolean(fen && moves.length)'));i++)await wait(100);
+  assert.equal(await js('adminMode'),false);
+  const d=screen.getPrimaryDisplay();
+  const fixture=new BrowserWindow({x:d.workArea.x+20,y:d.workArea.y+20,width:480,height:480,frame:false,alwaysOnTop:true,webPreferences:{sandbox:true}});
+  fixture.setAlwaysOnTop(true,'screen-saver');
+  await fixture.loadFile(path.join(__dirname,'board-fixture.html'));
+  panel.setPosition(d.workArea.x+520,d.workArea.y+20);
+  await js(`window.lens.selectBoard(${d.id})`);
+  let selector;
+  for(let i=0;i<30;i++){selector=BrowserWindow.getAllWindows().find(w=>w.targetDisplay);if(selector && !selector.webContents.isLoading())break;await wait(100);}
+  await selector.webContents.executeJavaScript('window.lens.selectRegion({x:20,y:20,size:480})');
+  await wait(350);
+  await js('render()');await wait(150);
+  const overlay=getOverlay();
+  const bubble=()=>overlay.webContents.executeJavaScript('document.querySelector("[data-kind=bubble]")?.textContent');
+  assert.match(await bubble(),/e4.*center/);
+  assert.equal(overlay.isFocusable(),false);
+  const clean=await js('window.lens.capture()'),expected=(await fixture.webContents.capturePage()).toDataURL();
+  assert.equal(await js(`Promise.all([fingerprints(${JSON.stringify(clean)}),fingerprints(${JSON.stringify(expected)})]).then(([a,b])=>changedCells(a,b,.018).length)`),0);
+  await fs.writeFile(path.join(__dirname,'../.tools/learning-bubble.png'),(await overlay.webContents.capturePage()).toPNG());
+  await js('$("show-bubbles").checked=false;$("show-bubbles").dispatchEvent(new Event("change"))');await wait(50);
+  assert.equal(await bubble(),undefined);
+  await js('$("show-bubbles").checked=true;$("show-bubbles").dispatchEvent(new Event("change"))');
+  await js(`(async()=>{for(const san of ['e4','e5','Nf3','Nc6','Bc4','Bc5','c3','Nf6','d3','d6']){const {move}=await window.lens.chess('move',{fen,move:san});followMove(move,false);}render();})()`);
+  for(let i=0;i<100;i++){if(await js('Boolean(coached?.result && !coached.pending && learning.transitionPly!==null)'))break;await wait(100);}
+  assert.equal(await js('learning.phase'),'transition');
+  assert.match(await js('$("next-move").textContent'),/opening is complete/);
+  const recommendation=await js('coached.result.move.san');
+  await wait(150);
+  assert.ok(await bubble());
+  await js('window.lens.openCoach()');await wait(250);
+  const coach=BrowserWindow.getAllWindows().find(w=>w.getTitle()==='Opening Lens Coach');
+  assert.ok(await coach.webContents.executeJavaScript('document.querySelector("#coach-details").textContent.length>50'));
+  await js(`window.lens.chess('move',{fen,move:${JSON.stringify(recommendation)}}).then(({move})=>followMove(move))`);await wait(100);
+  assert.equal(await js('learning.phase'),'complete');
+  assert.equal(await overlay.webContents.executeJavaScript('document.querySelectorAll("line,foreignObject").length'),0);
+  const summary=await js('learning.summary');
+  await js(`window.lens.chess('move',{fen,move:'a6'}).then(({move})=>followMove(move))`);await wait(100);
+  assert.equal(await js('learning.summary'),summary);
+  assert.equal(await overlay.webContents.executeJavaScript('document.querySelectorAll("line,foreignObject").length'),0);
+  await js('$("restart").click()');await wait(150);
+  assert.equal(await js('learning.phase'),'opening');
+  assert.match(await bubble(),/e4/);
+  await js(`(async()=>{
+    applyPlayerSide(true);$('lesson').value=4;await chooseLesson();blackDefenseChosen=true;
+    for(const san of ['e4','e6','d4','d5','e5','c5','c3','Nc6','Nf3']){const {move}=await window.lens.chess('move',{fen,move:san});followMove(move,false);}render();
+  })()`);
+  for(let i=0;i<100;i++){if(await js('Boolean(coached?.result && !coached.pending && learning.transitionPly!==null)'))break;await wait(100);}
+  assert.equal(await js('learning.phase'),'transition');await wait(100);
+  const black=await js('coached.result.move');
+  const start=await overlay.webContents.executeJavaScript('(()=>{const line=document.querySelector("line[data-kind=move]");return {x:Number(line.getAttribute("x1")),y:Number(line.getAttribute("y1"))};})()');
+  assert.deepEqual(start,{x:(7-(black.from.charCodeAt(0)-97))*100+50,y:(Number(black.from[1])-1)*100+50});
+  await js(`window.lens.chess('move',{fen,move:'a6'}).then(({move})=>followMove(move))`);await wait(100);
+  assert.equal(await js('learning.phase'),'complete');
+  assert.equal(await overlay.webContents.executeJavaScript('document.querySelectorAll("line,foreignObject").length'),0);
+  console.log('PASS: learning bubbles, clean capture, White/Black transitions, persistent handoff, reset, and deep Coach');
+  app.exit(0);
+};

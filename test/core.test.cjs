@@ -45,9 +45,9 @@ test('Developer Mode keeps bounded logs and retains the failure capture independ
   diagnostics.addOcr({text:'1. e4 e5'});
   diagnostics.record('Match rejected',{reason:'ambiguous'},true);
   diagnostics.setCaptures({panel:'newer image'});
-  for(let i=0;i<120;i++)diagnostics.record('Frame',{index:i});
+  for(let i=0;i<320;i++)diagnostics.record('Frame',{index:i});
   const result=diagnostics.snapshot();
-  assert.equal(result.events.length,100);
+  assert.equal(result.events.length,300);
   assert.equal(result.failure.captures.panel,'failure image');
   assert.equal(result.failure.ocr[0].text,'1. e4 e5');
   assert.equal(result.captures.panel,'newer image');
@@ -223,7 +223,9 @@ test('Coach gives legal position plans for the off-book Black position and later
 });
 
 test('the full catalog parses and indexes searchable, distinct continuations',()=>{
-  const book=buildCatalog(path.join(__dirname,'../data/openings'));
+  const directory=path.join(__dirname,'../data/openings');
+  const book=buildCatalog(directory,{useCache:false});
+  const cached=buildCatalog(directory);
   assert.equal(book.size,3815);
   assert.equal(book.positions,7864);
   assert.ok(book.search('D85 Grunfeld').some(r=>r.eco==='D85'));
@@ -233,6 +235,26 @@ test('the full catalog parses and indexes searchable, distinct continuations',()
   assert.equal(new Set(continuations.map(r=>r.uci)).size,continuations.length);
   const scores=Array.from({length:64},(_,i)=>i<16 || i>=48 ? .23 : .008);
   assert.equal(book.detect(scores).match.fen,fen);
+  assert.deepEqual(cached.detect(scores),book.detect(scores));
+  for(const pgn of ['1. e4','1. e4 d5','1. d4 d5 2. c4 e6','1. e4 e6 2. d4 d5 3. e5']){
+    const game=new Chess();game.loadPgn(pgn);
+    assert.deepEqual(cached.at(game.fen()),book.at(game.fen()));
+  }
+});
+
+test('saved late-game and timed-panel OCR reconstructs legal rows without trusting badges',()=>{
+  const evidence=require('./fixtures/multi-layout/ocr-evidence.json');
+  const cases=require('./fixtures/multi-layout/cases.json');
+  for(const id of ['roc-review','com-mate','com-late-rapid','com-mid-rapid']){
+    const [,pgn,anchor]=cases.find(row=>row[0]===id),game=new Chess(anchor);
+    if(anchor)for(const move of pgn.replace(/\d+\./g,'').trim().split(/\s+/))game.move(move);
+    else game.loadPgn(pgn);
+    const lines=evidence.find(row=>row.id===id).passes.flatMap(pass=>{
+      const grid=moveGridText(pass.words,pass.width,anchor?new Chess(anchor).moveNumber():0);
+      try{return parseRows(grid || '',true,anchor);}catch{return [];}
+    });
+    assert.ok(lines.some(line=>line.moves.at(-1)?.after.split(' ').slice(0,4).join(' ')===game.fen().split(' ').slice(0,4).join(' ')),id);
+  }
 });
 
 test('online move results keep legal moves and order them by real-game count',()=>{

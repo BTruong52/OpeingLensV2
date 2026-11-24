@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('lens', {
+  adminMode: process.argv.includes('--lens-admin'),
   displays: () => ipcRenderer.invoke('list-displays'),
   findBoard: () => ipcRenderer.invoke('find-board'),
   reviewRegions: () => ipcRenderer.invoke('region-review-data'),
@@ -10,7 +11,6 @@ contextBridge.exposeInMainWorld('lens', {
   selectRegion: rect => ipcRenderer.invoke('region-selected', rect),
   paint: data => ipcRenderer.invoke('paint-board', data),
   openCoach: () => ipcRenderer.invoke('open-coach'),
-  openStreamView: () => ipcRenderer.invoke('open-stream-view'),
   publishCoach: state => ipcRenderer.send('coach-state',state),
   onCoachState: callback => ipcRenderer.on('coach-state',(_,state)=>callback(state)),
   chooseCoachVariation: (position,id) => ipcRenderer.invoke('choose-coach-variation',position,id),
@@ -33,7 +33,7 @@ contextBridge.exposeInMainWorld('lens', {
   onMoveList: callback => ipcRenderer.on('move-list-selected',(_,selected)=>callback(selected)),
   chess: (action, data) => ipcRenderer.invoke('chess', action, data),
   catalog: (action,data) => ipcRenderer.invoke('catalog',action,data),
-  coachPosition: (fen,hints,online,onlyOnline=false,usual=null) => ipcRenderer.invoke('coach-position',fen,hints,online,onlyOnline===true,usual),
+  coachPosition: (fen,hints,online,onlyOnline=false,usual=null,transition=false) => ipcRenderer.invoke('coach-position',fen,hints,online,onlyOnline===true,usual,transition===true),
   onlineMasters: (fen,token) => ipcRenderer.invoke('online-masters',fen,token),
   tokenPage: () => ipcRenderer.invoke('online-token-page'),
   importPgn: () => ipcRenderer.invoke('import-pgn'),

@@ -1,0 +1,182 @@
+[
+  {
+    "id": "roc-start",
+    "board": {
+      "x": 540,
+      "y": 96,
+      "width": 920,
+      "height": 920
+    },
+    "panel": {
+      "x": 1487,
+      "y": 185,
+      "width": 301,
+      "height": 755
+    }
+  },
+  {
+    "id": "roc-review",
+    "board": {
+      "x": 24,
+      "y": 5,
+      "width": 920,
+      "height": 920
+    },
+    "panel": {
+      "x": 974,
+      "y": 96,
+      "width": 299,
+      "height": 719
+    }
+  },
+  {
+    "id": "roc-queens-pawn",
+    "board": {
+      "x": 24,
+      "y": 15,
+      "width": 920,
+      "height": 920
+    },
+    "panel": {
+      "x": 975,
+      "y": 108,
+      "width": 298,
+      "height": 307
+    }
+  },
+  {
+    "id": "roc-caro",
+    "board": {
+      "x": 540,
+      "y": 96,
+      "width": 920,
+      "height": 920
+    },
+    "panel": {
+      "x": 1487,
+      "y": 185,
+      "width": 301,
+      "height": 380
+    }
+  },
+  {
+    "id": "roc-english",
+    "board": {
+      "x": 22,
+      "y": 12,
+      "width": 920,
+      "height": 920
+    },
+    "panel": {
+      "x": 972,
+      "y": 104,
+      "width": 299,
+      "height": 375
+    }
+  },
+  {
+    "id": "roc-french-six",
+    "board": {
+      "x": 32,
+      "y": 9,
+      "width": 920,
+      "height": 920
+    },
+    "panel": {
+      "x": 983,
+      "y": 102,
+      "width": 298,
+      "height": 208
+    }
+  },
+  {
+    "id": "roc-french-eight",
+    "board": {
+      "x": 18,
+      "y": 7,
+      "width": 920,
+      "height": 920
+    },
+    "panel": {
+      "x": 969,
+      "y": 103,
+      "width": 298,
+      "height": 271
+    }
+  },
+  {
+    "id": "roc-scotch",
+    "board": {
+      "x": 17,
+      "y": 6,
+      "width": 920,
+      "height": 920
+    },
+    "panel": {
+      "x": 969,
+      "y": 103,
+      "width": 297,
+      "height": 338
+    }
+  },
+  {
+    "id": "com-qgd",
+    "board": {
+      "x": 2,
+      "y": 2,
+      "width": 784,
+      "height": 784
+    },
+    "panel": {
+      "x": 820,
+      "y": 270,
+      "width": 498,
+      "height": 330
+    }
+  },
+  {
+    "id": "com-mate",
+    "board": {
+      "x": 21,
+      "y": 7,
+      "width": 784,
+      "height": 784
+    },
+    "panel": {
+      "x": 842,
+      "y": 275,
+      "width": 494,
+      "height": 330
+    }
+  },
+  {
+    "id": "com-late-rapid",
+    "board": {
+      "x": 22,
+      "y": 31,
+      "width": 784,
+      "height": 784
+    },
+    "panel": {
+      "x": 842,
+      "y": 300,
+      "width": 495,
+      "height": 443
+    }
+  },
+  {
+    "id": "com-mid-rapid",
+    "board": {
+      "x": 18,
+      "y": 52,
+      "width": 784,
+      "height": 784
+    },
+    "panel": {
+      "x": 843,
+      "y": 322,
+      "width": 491,
+      "height": 444
+    }
+  }
+]

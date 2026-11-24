@@ -7,24 +7,32 @@ const { Chess } = require('chess.js');
 const { Worker } = require('node:worker_threads');
 const { fetchMasters } = require('./explorer.cjs');
 const { coachPosition } = require('./coach.cjs');
-const { readMoveImage, findMovesHeading } = require('./move-ocr.cjs');
+const { readMoveImage, findMovesHeading, findPanelWords } = require('./move-ocr.cjs');
+const {darkPanelVariant}=require('./panel-image.cjs');
 const {changedMoveRows}=require('./move-panel-crop.cjs');
 const diagnostics=require('./diagnostics.cjs');
 const startedAt=new Date().toISOString();
 process.on('uncaughtExceptionMonitor',error=>diagnostics.record('Main-process exception',
   {message:error.message,stack:error.stack},true));
-const { panelNearBoard } = require('./region-review.cjs');
+const { panelNearBoard, panelFromRows } = require('./region-review.cjs');
 const { createHash } = require('node:crypto');
 const { answerCoach } = require('./coach-chat.cjs');
+const adminMode=process.argv.includes('--admin');
 let coachWindow, coachState, chatBusy=false;
-let streamWindow,streamBoard;
-function sendStream(channel,value){
-  if(streamWindow && !streamWindow.isDestroyed() && !streamWindow.webContents.isLoading())streamWindow.webContents.send(channel,value);
-}
-function publishStreamBoard(image){
-  if(!streamWindow || streamWindow.isDestroyed())return;
-  streamBoard=typeof image==='string'?image:image.toDataURL();
-  sendStream('stream-board',streamBoard);
+const windowCapture=require('./window-capture.cjs');
+let captureHost,captureHostReady,captureVideo=[];
+const captureBindings=new Map();
+const captureSourceIds=new Map();
+async function cleanWindowFrames(requests){
+  if(!captureHost || captureHost.isDestroyed()){
+    captureHost=new BrowserWindow({show:false,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
+    safeWindow(captureHost);
+    captureHostReady=captureHost.loadFile(path.join(__dirname,'capture-host.html'));
+  }
+  await captureHostReady;
+  const result=await captureHost.webContents.executeJavaScript(`window.captureCleanRegions(${JSON.stringify(requests)})`);
+  captureVideo=result.metadata;
+  return result.images.map(url=>nativeImage.createFromDataURL(url));
 }
 let moveList, readingList=false;
 let trackingFrame,confirmedFrame,trackingFrameId=0;
@@ -55,7 +63,7 @@ function askCatalog(action,data){
   });
 }
 let panel, overlay, selector, boardRegion, boardDisplayId, capturing=false, annotations = { arrows: [], highlights: [] }, visible = true;
-const options = { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true };
+const options = { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, additionalArguments:adminMode?['--lens-admin']:[] };
 const intersects=(a,b)=>a.x<b.x+b.width && a.x+a.width>b.x && a.y<b.y+b.height && a.y+a.height>b.y;
 function updateCoachOverlap(){
   if(!coachWindow || coachWindow.isDestroyed() || coachWindow.webContents.isLoading())return;
@@ -66,12 +74,13 @@ function updateCoachOverlap(){
   coachWindow.webContents.send('coach-overlap',targets);
 }
 function excludeFromCapture(win){
-  if(process.platform==='win32')win.setContentProtection(true);
+  // Capture the underlying game window, so overlays can stay visible in desktop streams.
+  win.setContentProtection(false);
 }
 function isPanelSender(event) {
   return Boolean(panel && !panel.isDestroyed() && !panel.webContents.isDestroyed() && event.sender===panel.webContents);
 }
-function sendOverlay() { const data={...annotations,visible}; if (overlay && !overlay.isDestroyed() && !overlay.webContents.isDestroyed()) overlay.webContents.send('paint',data); sendStream('paint',data); }
+function sendOverlay() { const data={...annotations,visible}; if (overlay && !overlay.isDestroyed() && !overlay.webContents.isDestroyed()) overlay.webContents.send('paint',data); }
 function safeWindow(win) {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', e => e.preventDefault());
@@ -87,7 +96,8 @@ function makeOverlay() {
   overlay.webContents.once('did-finish-load', sendOverlay);
 }
 function connectBoard(region,id,auto=false) {
-  streamBoard=null;sendStream('stream-board',null);
+  captureBindings.clear();
+  captureSourceIds.clear();
   boardRegion=region;boardDisplayId=id;
   annotations={arrows:[],highlights:[]};
   makeOverlay();
@@ -128,9 +138,10 @@ app.whenReady().then(async () => {
     }catch(error){console.error(error.message);app.exit(1);}
     return;
   }
-  panel = new BrowserWindow({ width: 440, height: 880, minWidth: 390, minHeight: 660, backgroundColor: '#10191b', title: 'Opening Lens', webPreferences: options });
+  panel = new BrowserWindow({ width: 440, height: 880, minWidth: 390, minHeight: 660, backgroundColor: '#10191b', title: adminMode?'Opening Lens (Admin)':'Opening Lens', webPreferences: options });
   safeWindow(panel);
   panel.loadFile(path.join(__dirname, 'index.html'));
+  if (process.argv.includes('--learning-test')) panel.webContents.once('did-finish-load',async()=>{try{await require('../test/learning-smoke.cjs')({app,panel,getOverlay:()=>overlay});}catch(error){console.error(error);app.exit(1);}});
   if (process.argv.includes('--smoke-test')) panel.webContents.once('did-finish-load', async () => {
     try { await require('../test/native-smoke.cjs')({ app, panel, getOverlay: () => overlay, getSelector: () => selector, darkPanelVariant, beginRegionReview }); }
     catch(error){console.error(error);app.exit(1);}
@@ -155,7 +166,7 @@ app.whenReady().then(async () => {
     });
   }
 });
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {globalShortcut.unregisterAll();windowCapture.close();});
 ipcMain.handle('open-coach',event=>{
   if(!isPanelSender(event))return;
   if(coachWindow && !coachWindow.isDestroyed()){
@@ -185,29 +196,7 @@ ipcMain.handle('open-coach',event=>{
 ipcMain.on('coach-state',(event,state)=>{
   if(!isPanelSender(event))return;
   coachState=state;
-  sendStream('coach-state',state);
   if(coachWindow && !coachWindow.isDestroyed() && !coachWindow.webContents.isDestroyed())coachWindow.webContents.send('coach-state',state);
-});
-ipcMain.handle('open-stream-view',event=>{
-  if(!isPanelSender(event))return false;
-  if(streamWindow && !streamWindow.isDestroyed()){streamWindow.show();return true;}
-  const displays=screen.getAllDisplays();
-  const display=displays.find(d=>d.id!==boardDisplayId) || screen.getDisplayMatching(panel.getBounds());
-  const area=display.workArea;
-  streamWindow=new BrowserWindow({title:'Opening Lens Stream View',x:area.x+20,y:area.y+20,
-    width:Math.min(1040,area.width-40),height:Math.min(780,area.height-40),minWidth:480,minHeight:400,
-    backgroundColor:'#10191b',webPreferences:{...options,preload:path.join(__dirname,'stream-preload.cjs')}});
-  safeWindow(streamWindow);
-  streamWindow.on('closed',()=>{streamWindow=null;streamBoard=null;});
-  streamWindow.webContents.once('did-finish-load',()=>{
-    sendStream('stream-board',streamBoard);
-    sendStream('paint',{...annotations,visible});
-    if(coachState)sendStream('coach-state',coachState);
-  });
-  streamWindow.loadFile(path.join(__dirname,'stream-view.html'));
-  // Reuse the last clean tracking frame; opening this view never starts a capture loop.
-  if(trackingFrame?.region===boardRegion)publishStreamBoard(trackingFrame.board);
-  return true;
 });
 ipcMain.handle('choose-coach-variation',(event,position,id)=>{
   if(!coachWindow || event.sender!==coachWindow.webContents || coachState?.fen!==position || !coachState.variations?.some(choice=>choice.id===id))return false;
@@ -259,8 +248,9 @@ ipcMain.handle('region-selected', (event, rect) => {
   if(width<(isList?80:160) || height<(isList?28:160))return false;
   const completedSelector = selector;
   // Let the IPC acknowledgement reach the selection renderer before destroying it.
-  completedSelector.hide();
-  setTimeout(() => { if (!completedSelector.isDestroyed()) completedSelector.close(); }, 50);
+  // Keep the renderer alive and visible until its selection acknowledgement
+  // has been delivered. Hiding first can throttle it before IPC completes.
+  setTimeout(() => { if (!completedSelector.isDestroyed()) completedSelector.close(); }, 150);
   const region={x:Math.round(bounds.x+rect.x),y:Math.round(bounds.y+rect.y),width,height};
   if(isList){moveList={region,id};panel.webContents.send('move-list-selected',true);updateCoachOverlap();}
   else connectBoard(region,id);
@@ -349,8 +339,10 @@ async function findCaptureRegions(){
     const {display,image,rect,pixel,width,height,scaleX,scaleY,region}=candidate;
     let moves;
     try {
-      const headings=await findMovesHeading(image.toPNG());
-      const guess=panelNearBoard(rect,headings,width,height,pixel);
+      const words=await findPanelWords(image.toPNG());
+      const headings=words.filter(word=>/^moves:?$/i.test(word.text.trim())).map(word=>word.bbox);
+      const guess=panelFromRows(rect,words,width,height,pixel) || panelNearBoard(rect,headings,width,height,pixel);
+      diagnostics.record('Auto-detection',{board:region,headings,numberedWords:words.filter(w=>/^\d+[.)]?$/.test(w.text.trim())),movePanel:guess || null});
       if(guess)moves={x:display.bounds.x+Math.round(guess.x*scaleX),y:display.bounds.y+Math.round(guess.y*scaleY),width:Math.round(guess.width*scaleX),height:Math.round(guess.height*scaleY)};
     }catch{}
     return {display,image,board:region,moves};
@@ -390,19 +382,46 @@ async function captureRegions(regions,calibration) {
     if(region.x<b.x || region.y<b.y || region.x+region.width>b.x+b.width || region.y+region.height>b.y+b.height)throw Error('Select each region entirely inside one display.');
     return {region,display};
   });
-  // The drawing and Coach windows stay visible but are excluded from capture.
+  // Read the underlying window, not the composited desktop, on Windows.
   const panelVisible = panel.isVisible() && !panel.isMinimized();
-  if (!calibration && panelVisible && regions.some(target=>intersects(panel.getBounds(),target.region))) {
+  if (process.platform!=='win32' && !calibration && panelVisible && regions.some(target=>intersects(panel.getBounds(),target.region))) {
     throw Error('The main window overlaps a capture area. Move it aside and restart tracking.');
-  }
-  if(streamWindow && !streamWindow.isDestroyed() && streamWindow.isVisible() && !streamWindow.isMinimized() &&
-    regions.some(target=>intersects(streamWindow.getBounds(),target.region))){
-    throw Error('Stream View overlaps the board or move panel. Move Stream View to another monitor or a clear area.');
   }
   capturing = true;
   if (calibration && panelVisible) panel.hide();
   try {
     if(calibration && panelVisible)await new Promise(resolve => setTimeout(resolve, 120));
+    if(process.platform==='win32'){
+      const inventory=await windowCapture.windows(path.join(app.getPath('userData'),'capture-helper'));
+      const excluded=[panel,overlay,coachWindow,selector].filter(win=>win && !win.isDestroyed()).map(win=>{
+        const handle=win.getNativeWindowHandle();
+        return (handle.length===8?handle.readBigUInt64LE():BigInt(handle.readUInt32LE())).toString();
+      });
+      const physical=targets.map(({region})=>screen.dipToScreenRect(null,region));
+      const selected=physical.map(region=>{
+        const key=JSON.stringify(region),binding=captureBindings.get(key);
+        const win=binding?inventory.find(win=>win.id===binding && windowCapture.contains(win.frame,region)):
+          inventory.find(win=>!excluded.includes(win.id) && windowCapture.contains(win.frame,region));
+        if(win)captureBindings.set(key,win.id);
+        return win;
+      });
+      if(selected.some(win=>!win))throw Error('No game window contains the capture area. Keep the game visible and reselect its board and move panel.');
+      // Enumerate only when binding a new window. Re-enumerating every sample
+      // adds hundreds of milliseconds even with zero-size thumbnails.
+      if(selected.some(win=>!captureSourceIds.has(win.id))){
+        const sources=await desktopCapturer.getSources({types:['window'],thumbnailSize:{width:0,height:0},fetchWindowIcons:false});
+        for(const source of sources)captureSourceIds.set(source.id.split(':')[1],source.id);
+      }
+      const requests=selected.map((win,i)=>{
+        const id=captureSourceIds.get(win.id);
+        if(!id)throw Error('The game window is not available for capture. Restore it from the taskbar.');
+        return {id,bounds:win.frame,outerBounds:win.bounds,clientBounds:win.client,region:physical[i]};
+      });
+      let images;
+      try{images=await cleanWindowFrames(requests);}catch(error){captureSourceIds.clear();throw error;}
+      diagnostics.setCaptureSource({type:'continuous-window',windows:selected.map(win=>({id:win.id,bounds:win.frame})),regions:physical,video:captureVideo});
+      return images;
+    }
     const width=Math.max(...targets.map(({display:d})=>Math.round(d.bounds.width*d.scaleFactor)));
     const height=Math.max(...targets.map(({display:d})=>Math.round(d.bounds.height*d.scaleFactor)));
     const sources=await desktopCapturer.getSources({types:['screen'],thumbnailSize:{width,height}});
@@ -422,42 +441,19 @@ async function captureRegions(regions,calibration) {
 }
 ipcMain.handle('capture-board',async(event,calibration)=>{
   if(!isPanelSender(event) || !boardRegion)throw Error('Select a board first.');
+  const started=performance.now();
   const [image]=await captureRegions([{region:boardRegion,id:boardDisplayId}],calibration);
   const url=image.toDataURL();
-  publishStreamBoard(url);
   if(diagnostics.isEnabled()){
     diagnostics.setCaptures({board:url,liveMetadata:{at:new Date().toISOString(),
       boardRegion:{...boardRegion,displayId:boardDisplayId},boardPixels:image.getSize()}});
-    diagnostics.record('Board captured',{calibration});
+    diagnostics.record('Board captured',{calibration,elapsedMs:performance.now()-started});
   }
   return url;
 });
-function darkPanelVariant(image){
-  const {width,height}=image.getSize(), pixels=image.toBitmap();
-  if(pixels.length!==width*height*4 || width>1100 || height>1100)return null;
-  const gray=i=>(pixels[i]+pixels[i+1]+pixels[i+2])/3;
-  const samples=Array.from({length:49},(_,i)=>gray((Math.floor((Math.floor(i/7)+.5)*height/7)*width+Math.floor((i%7+.5)*width/7))*4)).sort((a,b)=>a-b);
-  if(samples[24]>100)return null;
-  // Keep the full selected area, but give small light-on-dark text a second
-  // pass on a light background at twice the pixel size.
-  const edge=Math.max(3,Math.floor(width*.02));
-  let end=height-1;
-  for(;end>=28;end--){
-    let ink=0;
-    for(let x=edge;x<width-edge;x++)if(gray((end*width+x)*4)>Math.max(85,samples[24]+46))ink++;
-    if(ink>=4 && ink<width*.3)break;
-  }
-  const w=width*2,h=Math.min(height,end+15)*2,target=Buffer.alloc(w*h*4,255);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-    const src=(Math.floor(y/2)*width+Math.floor(x/2))*4,to=(y*w+x)*4;
-    target[to]=target[to+1]=target[to+2]=255-Math.round(gray(src));
-  }
-  return nativeImage.createFromBitmap(target,{width:w,height:h}).toPNG();
-}
 async function sampleTrackingFrame(calibration=false){
   const started=performance.now();
   const [board,list]=await captureRegions([{region:boardRegion,id:boardDisplayId},moveList],calibration);
-  publishStreamBoard(board);
   trackingFrame={id:++trackingFrameId,board,list,region:boardRegion,moves:moveList,
     signature:createHash('sha256').update(list.toBitmap()).digest('hex'),captureMs:performance.now()-started};
   if(diagnostics.isEnabled() && (calibration || Date.now()-lastDiagnosticCapture>=1000)){
@@ -495,7 +491,7 @@ async function captureMoveList(event,anchor,id,quick=false){
     const {board}=frame;
     const previous=confirmedFrame?.region===boardRegion && confirmedFrame.moves===moveList?confirmedFrame.list:null;
     let ocrCrop;
-    const list=quick?changedMoveRows(previous,frame.list,diagnostics.isEnabled()?region=>{ocrCrop=region;}:undefined):frame.list;
+    const list=quick || anchor && previous ?changedMoveRows(previous,frame.list,diagnostics.isEnabled()?region=>{ocrCrop=region;}:undefined):frame.list;
     const width=list.getSize().width;
     const image=list.resize({width:Math.min(1600,Math.max(650,width*2)),quality:'best'});
     const known=typeof anchor==='string' && anchor.length<=120 ? new Chess(anchor).fen() : null;
@@ -525,6 +521,12 @@ async function captureMoveList(event,anchor,id,quick=false){
       diagnostics.record('OCR failed',{frameId:frame.id,elapsedMs:performance.now()-started,error:error.message},true);
       throw error;
     }
+    // OCR can outlive several moves. Never publish a stale board as current.
+    const [latestList]=await captureRegions([moveList],false);
+    if(createHash('sha256').update(latestList.toBitmap()).digest('hex')!==frame.signature){
+      diagnostics.record('OCR superseded',{frameId:frame.id,elapsedMs:performance.now()-started});
+      throw Error('New moves arrived while reading. Catching up to the latest frame.');
+    }
     return {board:frame.boardUrl || board.toDataURL(),signature:frame.signature,frameId:frame.id,
       ...result};
   } finally {readingList=false;}
@@ -533,7 +535,11 @@ ipcMain.handle('capture-move-list',captureMoveList);
 function diagnosticSnapshot(){
   return {...diagnostics.snapshot(),runtime:{appVersion:app.getVersion(),platform:process.platform,arch:process.arch,
     electron:process.versions.electron,chrome:process.versions.chrome,node:process.versions.node,
-    packaged:app.isPackaged,startedAt}};
+    packaged:app.isPackaged,edition:adminMode?'admin':'learning',startedAt,windowsRelease:require('node:os').release(),gpu:app.getGPUFeatureStatus()},session:{boardRegion,boardDisplayId,moveList,
+      frameId:trackingFrame?.id,confirmedFrameId:confirmedFrame?.id,capturing,readingList,
+      arrows:annotations,coach:coachState,analysisPending:Boolean(coachingTask),
+      displays:screen.getAllDisplays().map(d=>({id:d.id,label:d.label,bounds:d.bounds,scaleFactor:d.scaleFactor})),
+      memory:process.memoryUsage()}};
 }
 ipcMain.handle('diagnostics-enabled',(event,value)=>{
   if(!isPanelSender(event))throw Error('Unsupported caller.');
@@ -552,7 +558,7 @@ ipcMain.on('diagnostics-event',(event,entry)=>{
 ipcMain.on('diagnostics-state',(event,state)=>{
   if(!isPanelSender(event) || !diagnostics.isEnabled())return;
   const keys=['fen','initialFen','running','uncertain','flipped','side','skill','opening','index','lineLength',
-    'moveListSelected','listStable','listBaseline','listCandidate','selected','coachPending','coachMove','status','captureState'];
+    'moveListSelected','listStable','listBaseline','listCandidate','selected','edition','lessonPhase','lessonEndPly','coachPending','coachMove','status','captureState'];
   const safe={};
   for(const key of keys)if(['string','number','boolean'].includes(typeof state?.[key]))safe[key]=state[key];
   diagnostics.setState(safe);
@@ -619,7 +625,7 @@ ipcMain.handle('online-masters',async(event,fen,token)=>{
 ipcMain.handle('online-token-page',event=>{
   if(isPanelSender(event))return shell.openExternal('https://lichess.org/account/oauth/token/create');
 });
-ipcMain.handle('coach-position',async(event,fen,hints,online,onlyOnline,usual)=>{
+ipcMain.handle('coach-position',async(event,fen,hints,online,onlyOnline,usual,transition)=>{
   if(!isPanelSender(event) || typeof fen!=='string' || fen.length>120 || !Array.isArray(hints) || hints.length>16)throw Error('Invalid coaching request.');
   coachingTask?.abort();
   const task=new AbortController();
@@ -632,7 +638,7 @@ ipcMain.handle('coach-position',async(event,fen,hints,online,onlyOnline,usual)=>
       .filter(row=>row && typeof row.uci==='string' && Number.isSafeInteger(row.total) && row.total>0)
       .map(row=>({uci:row.uci,count:row.total})).sort((a,b)=>b.count-a.count):[];
     const result=await coachPosition(fen,hints,{signal:task.signal,online:popularity,catalog:local.next,onlyOnline:onlyOnline===true,usual,
-      fallback:!local.next?.length && !popularity.length});
+      fallback:transition===true || !local.next?.length && !popularity.length});
     diagnostics.record('Coach analysis completed',{fen,elapsedMs:performance.now()-started,move:result?.move?.san,
       depth:result?.depth,basis:result?.basis,alternatives:result?.alternatives?.map(plan=>plan.move.san)});
     return result;

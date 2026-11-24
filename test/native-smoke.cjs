@@ -23,7 +23,7 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
   assert.deepEqual(await js('Array.from(document.querySelectorAll("main > section .section-title span"),node=>node.textContent)'),['01 / SELECT BOARD','02 / SKILL LEVEL & OPENINGS','03 / FOLLOW THE POSITION']);
   assert.ok(await js('$("skill").compareDocumentPosition($("lesson")) & Node.DOCUMENT_POSITION_FOLLOWING'));
   assert.equal(await js('Boolean($("coach-test") || $("analyze-plan"))'),false);
-  for(let i=0;i<50;i++){if((await js('$("coach-note").textContent')).startsWith('Coach ·'))break;await wait(100);}
+  for(let i=0;i<160;i++){if((await js('$("coach-note").textContent')).startsWith('Coach ·'))break;await wait(100);}
   assert.match(await js('$("coach-note").textContent'),/^Coach ·/);
   assert.equal(await js('$("next-move").textContent'),'1. e4');
   const suggestions=()=>js('Array.from($("suggestions").children,b=>b.textContent)');
@@ -45,12 +45,14 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
   await js('document.querySelector("#restart").click()');await wait(100);
   assert.equal(await js('document.querySelector("#next-move").textContent'),'1. e4');
   const screens=await js('window.lens.displays()');
+  console.log('Native smoke: selecting monitor regions');
   assert.deepEqual(screens.map(d=>d.id),screen.getAllDisplays().map(d=>d.id));
   for(const d of screen.getAllDisplays().filter(d=>d.id!==screen.getPrimaryDisplay().id)){
     await js(`window.lens.selectBoard(${d.id})`);
     for(let i=0;i<30;i++){if(getSelector() && !getSelector().webContents.isLoading())break;await wait(100);}
     assert.equal(getSelector().targetDisplay.id,d.id);
     const bounds=getSelector().getBounds();
+    fixture.setPosition(bounds.x+20,bounds.y+20);
     assert.deepEqual(bounds,d.workArea);
     assert.equal(panel.isVisible(),false);
     await getSelector().webContents.executeJavaScript('window.lens.selectRegion({x:20,y:20,size:320})');
@@ -64,6 +66,8 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
     assert.equal(panel.isVisible(),true);
     assert.ok(otherCapture.startsWith('data:image/png;base64,'));
   }
+  fixture.setPosition(x+20,y+20);
+  console.log('Native smoke: capturing underneath overlays');
   await js(`window.lens.selectBoard(${screen.getPrimaryDisplay().id})`);
   for(let i=0;i<30;i++){if(getSelector() && !getSelector().webContents.isLoading())break;await wait(100);}
   await getSelector().webContents.executeJavaScript('window.lens.selectRegion({x:20,y:20,size:320})');
@@ -74,9 +78,13 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
   assert.equal(await getOverlay().webContents.executeJavaScript('document.querySelectorAll("line[data-kind=move]").length'),1);
   assert.equal(await getOverlay().webContents.executeJavaScript('document.querySelectorAll("line[data-kind=idea]").length'),2);
   const capture=await js('window.lens.capture()');assert.ok(capture.startsWith('data:image/png;base64,'));
+  console.log('Native smoke: capture received');
   assert.equal(await js(`fingerprints(${JSON.stringify(capture)}).then(f=>f.length)`),64);
   assert.equal(await js(`fingerprints(${JSON.stringify(capture)}).then(f=>changedCells(f,f).length)`),0);
   const boardBefore=(await fixture.webContents.capturePage()).toDataURL();
+  await fs.writeFile(path.join(__dirname,'../.tools/clean-window-actual.png'),Buffer.from(capture.split(',')[1],'base64'));
+  await fs.writeFile(path.join(__dirname,'../.tools/clean-window-expected.png'),Buffer.from(boardBefore.split(',')[1],'base64'));
+  assert.equal(await js(`Promise.all([fingerprints(${JSON.stringify(capture)}),fingerprints(${JSON.stringify(boardBefore)})]).then(([a,b])=>changedCells(a,b,.018).length)`),0,'Capture must exclude the visible arrows');
   const fixtureImage=await fixture.webContents.capturePage();
   const fixtureSize=fixtureImage.getSize(), bitmap=fixtureImage.toBitmap();
   const detected=require('../src/board-detector.cjs').detectBoards(fixtureSize.width,fixtureSize.height,(x,y)=>{
@@ -102,8 +110,8 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
   assert.equal(autoCoach.isVisible(),true);
   const coachMessage=win=>win.webContents.executeJavaScript('document.querySelector("#coach-message").textContent');
   assert.match(await coachMessage(autoCoach),/^Coach: e4, Plant a pawn in the center/);
-  assert.equal(autoCoach.isContentProtected(),true);
-  assert.equal(getOverlay().isContentProtected(),true);
+  assert.equal(autoCoach.isContentProtected(),false);
+  assert.equal(getOverlay().isContentProtected(),false);
   autoCoach.setPosition(x+20,y+20);
   const warning=win=>win.webContents.executeJavaScript('document.querySelector("#overlap-warning").textContent');
   for(let i=0;i<20 && !(await warning(autoCoach));i++)await wait(50);
@@ -112,7 +120,12 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
   const hidden=()=>hides++;
   autoCoach.on('hide',hidden);
   getOverlay().on('hide',hidden);
-  for(let i=0;i<3;i++)await js('window.lens.capture()');
+  const captureStarted=performance.now();
+  for(let i=0;i<3;i++){
+    const clean=await js('window.lens.capture()');
+    assert.equal(await js(`Promise.all([fingerprints(${JSON.stringify(clean)}),fingerprints(${JSON.stringify(boardBefore)})]).then(([a,b])=>changedCells(a,b,.018).length)`),0,'The visible overlapping Coach must not appear in tracking captures');
+  }
+  console.log('Warm clean capture:',Math.round((performance.now()-captureStarted)/3),'ms per capture including comparison');
   assert.equal(hides,0);
   assert.equal(autoCoach.isVisible(),true);
   assert.equal(getOverlay().isVisible(),true);
@@ -305,9 +318,9 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
     baseline=await fingerprints(${JSON.stringify(boardBefore)});
     for(let i=0;i<6;i++){await captureLoop(epoch,async()=>${JSON.stringify(skippedPosition)});clearTimeout(timer);}
   })()`);
-  assert.equal(await js('$("next-move").textContent'),'Board needs attention');
-  assert.match(await js('$("status").textContent'),/Tracking paused:/);
-  assert.equal(await js('$("preview").open'),true);
+  assert.equal(await js('$("next-move").textContent'),'Checking board');
+  assert.match(await js('$("status").textContent'),/Catching up with the board/);
+  assert.equal(await js('running'),true);
   assert.equal(await arrowCount(),0);
   await js('$("lesson").value=4; $("lesson").dispatchEvent(new Event("change"))');await wait(100);
   assert.equal(await js('$("lesson").selectedOptions[0].textContent'),'French Defense');
@@ -325,7 +338,7 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
     baseline=await fingerprints(${JSON.stringify(frenchBefore)});
     for(let i=0;i<6;i++){await captureLoop(epoch,async()=>${JSON.stringify(frenchAfter)});clearTimeout(timer);}
   })()`);
-  assert.match(await js('$("status").textContent'),/Recovered e6, d4/);
+  assert.match(await js('$("status").textContent'),/Tracked e6 → d4/);
   assert.equal(await js('$("next-move").textContent'),'2… d5');
   assert.match(await js('$("plan-preview").textContent'),/2… d5 → 3\. e5 → 3… c5/);
   assert.equal(await arrowCount(),1);
@@ -378,7 +391,7 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
     pause();
   })()`);
   assert.equal(await js('$("next-move").textContent'),'Waiting for Black');
-  assert.match(await js('$("move-list-state").textContent'),/Move list readable/);
+  assert.match(await js('$("move-list-state").textContent'),/Board verified/);
   const tandem=await js(`(async()=>{
     const initial=${JSON.stringify(first.initial)},after=${JSON.stringify(first.moves[0].after)};
     setFen(initial);syncIndex();baseline=await fingerprints(${JSON.stringify(boardBefore)});
@@ -392,8 +405,8 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
     await moveListLoop(epoch,async()=>({signature:'new',board:null}),async()=>{reads++;});clearTimeout(timer);
     const result={reads,quick,held,fen,uncertain};pause();return result;
   })()`);
-  assert.equal(tandem.reads,1);
-  assert.equal(tandem.quick,true);
+  assert.equal(tandem.reads,0);
+  assert.equal(tandem.quick,false);
   assert.deepEqual(tandem.held.slice(0,3),Array(3).fill(first.initial));
   assert.equal(tandem.fen,first.moves[0].after);
   assert.equal(tandem.uncertain,false);
@@ -651,22 +664,29 @@ module.exports = async ({app,panel,getOverlay,getSelector,darkPanelVariant,begin
   for(let i=0;i<40 && getSelector();i++)await wait(100);
   assert.deepEqual(getOverlay().getBounds(),proposed);
   // Discord shares this normal window; protected local overlays remain separate.
-  await js('window.lens.openStreamView()');
-  const stream=BrowserWindow.getAllWindows().find(win=>win.getTitle()==='Opening Lens Stream View');
-  assert.ok(stream);
-  for(let i=0;i<40 && stream.webContents.isLoading();i++)await wait(100);
-  await js('window.lens.capture(true)');
-  await js(`window.lens.paint({flipped:true,arrows:[{from:'g8',to:'f6'}],highlights:['f6']});window.lens.publishCoach({opening:'Stream test',usable:true,move:'Nf6',explanation:'Develop the knight.'})`);
-  await wait(180);
-  assert.equal(await stream.webContents.executeJavaScript('document.getElementById("stream-board").hidden'),false);
-  assert.equal(await stream.webContents.executeJavaScript('document.querySelector("svg line").getAttribute("x1")'),'150');
-  assert.match(await stream.webContents.executeJavaScript('document.getElementById("message").textContent'),/Nf6, Develop the knight/);
-  assert.equal(await stream.webContents.executeJavaScript('typeof window.lens.capture'),'undefined');
-  // A stream preview must never become its own tracking input.
-  stream.setBounds({...proposed,width:480,height:400});
-  await wait(100);
-  assert.match(await js('window.lens.capture().then(()=>"accepted",error=>error.message)'),/Stream View overlaps/);
-  stream.close();
+  assert.equal(await js('Boolean($("open-stream-view"))'),false);
+  assert.equal(await js('Boolean($("import"))'),false);
+  assert.equal(await js('$("advanced").contains($("manual-move")) && $("advanced").contains($("fen")) && $("advanced").contains($("online-panel"))'),true);
+  assert.equal(getOverlay().isContentProtected(),false);
+  // Both windows remain visible to desktop streams; capture still sees the
+  // underlying fixture, with no flashing and no Coach/arrow contamination.
+  await js('pause()');
+
+  // WGC includes the native title bar on framed game/browser windows. Verify
+  // the desktop-to-client crop, not only frameless Electron fixtures.
+  const framed=new BrowserWindow({x:x+20,y:y+20,width:320,height:320,useContentSize:true,
+    title:'Framed capture fixture',alwaysOnTop:true,webPreferences:{sandbox:true,contextIsolation:true}});
+  await framed.loadFile(path.join(__dirname,'board-fixture.html'));
+  framed.setAlwaysOnTop(true,'screen-saver');
+  const client=framed.getContentBounds(),work=screen.getPrimaryDisplay().workArea;
+  await js(`window.lens.selectBoard(${screen.getPrimaryDisplay().id})`);
+  for(let i=0;i<30;i++){if(getSelector() && !getSelector().webContents.isLoading())break;await wait(100);}
+  await getSelector().webContents.executeJavaScript(`window.lens.selectRegion({x:${client.x-work.x},y:${client.y-work.y},size:320})`);
+  await wait(300);
+  const framedRead=await js('window.lens.capture()'),framedExpected=(await framed.webContents.capturePage()).toDataURL();
+  assert.equal(await js(`Promise.all([fingerprints(${JSON.stringify(framedRead)}),fingerprints(${JSON.stringify(framedExpected)})]).then(([a,b])=>changedCells(a,b,.018).length)`),0,'Framed window crop must align with its client board');
+  framed.close();
+
   assert.deepEqual(errors,[]);
   console.log(`PASS: ${screens.length} monitor(s), overlay and calibration, opening switch prompts, catalog search and line selection, online token prompt, and trap branches.`);
   app.exit(0);

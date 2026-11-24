@@ -1,6 +1,6 @@
 (()=>{
   const byId=id=>document.getElementById(id);
-  let enabled=false,timer,latest,drawVersion=0,shownKey='';
+  let enabled=true,timer,latest,drawVersion=0,shownKey='';
   const record=(stage,details={},failed=false)=>{
     if(enabled)window.lens.diagnosticsEvent({stage,details,failed});
   };
@@ -19,7 +19,7 @@
   }
   async function drawWords(pass,captures){
     const version=++drawVersion,canvas=byId('debug-words');
-    const url=pass && captures[pass.variant];
+    const url=pass && (pass.inputImage || captures[pass.variant]);
     canvas.hidden=!url;
     if(!url)return;
     const image=new Image();image.src=url;
@@ -124,4 +124,5 @@
     }catch(error){byId('debug-message').textContent=error.message;}
     finally{refresh();}
   };
+  byId('debug-enabled').checked=true;
 })();

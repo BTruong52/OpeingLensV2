@@ -7,8 +7,18 @@ function mask(fen){
   return fen.split(' ')[0].replaceAll('/','').replace(/[1-8]/g,n=>'0'.repeat(+n)).replace(/[a-z]/gi,'1');
 }
 function normalize(value){return value.toLowerCase().normalize('NFD').replace(/\p{M}/gu,'');}
-function buildCatalog(directory){
-  const records=[], positions=new Map(), occupied=new Map();
+function buildCatalog(directory,{useCache=true,writeCache=false}={}){
+  const volumes=[...'abcde'].map(volume=>fs.readFileSync(path.join(directory,volume+'.tsv'),'utf8'));
+  const hash=require('node:crypto').createHash('sha256').update('catalog-index-1\n'+volumes.join('\n')).digest('hex');
+  const cachePath=path.join(directory,'index.json');
+  let records=[],positions=new Map(),occupied=new Map(),cached=false;
+  if(useCache)try{
+    const data=JSON.parse(fs.readFileSync(cachePath,'utf8'));
+    if(data.hash===hash){
+      records=data.records;positions=new Map(data.positions);
+      occupied=new Map(data.occupied.map(([key,entries])=>[key,new Map(entries)]));cached=true;
+    }
+  }catch{}
   const add=(fen,id,index,move)=>{
     const key=positionKey(fen);
     if(!positions.has(key)) {
@@ -24,8 +34,8 @@ function buildCatalog(directory){
     }
     positions.get(key).push({id,index,next:move?.san,uci:move && move.from+move.to+(move.promotion||'')});
   };
-  for(const volume of 'abcde'){
-    const rows=fs.readFileSync(path.join(directory,volume+'.tsv'),'utf8').trimEnd().split(/\r?\n/).slice(1);
+  if(!cached)for(const volume of volumes){
+    const rows=volume.trimEnd().split(/\r?\n/).slice(1);
     for(const row of rows){
       const [eco,name,pgn]=row.split('\t');
       const c=new Chess();
@@ -36,6 +46,9 @@ function buildCatalog(directory){
       add(c.fen(),id,moves.length);
     }
   }
+  // Generated once for a build, never written into an installed app at runtime.
+  if(writeCache && !cached)fs.writeFileSync(cachePath,JSON.stringify({hash,records,positions:[...positions],
+    occupied:[...occupied].map(([key,entries])=>[key,[...entries]])}));
   const describe=entry=>({...entry,...records[entry.id]});
   return {
     size:records.length, positions:positions.size,

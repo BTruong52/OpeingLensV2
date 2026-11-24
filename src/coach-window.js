@@ -9,6 +9,8 @@ window.lens.onCoachOverlap(targets=>{
 });
 window.lens.onCoachState(state=>{
   $('coach-opening').textContent=state.opening;
+  $('coach-details').textContent=(state.details || '').split('\n\n').filter(p=>p!==state.explanation && p!==state.review).join('\n\n');
+  $('coach-depth').hidden=!$('coach-details').textContent;
   const current=state.usable && state.move
     ? [state.move+', '+state.explanation,state.review].filter(Boolean).join(' ')
     : state.explanation || 'Waiting for the current position.';
@@ -27,6 +29,7 @@ window.lens.onCoachState(state=>{
     for(const choice of variations){
       const button=document.createElement('button');
       button.className=state.planning?'variation plan-option':'variation';
+      button.dataset.intent=choice.intent || '';
       const title=document.createElement('strong');
       title.textContent=choice.name+' · '+choice.move;
       const reason=document.createElement('span');

@@ -2,5 +2,7 @@
 .coach-window #overlap-warning{padding:8px 10px;border:1px solid #a16f46;border-radius:7px;background:#3e2b23;color:#ffd6a7;font-weight:600}
 .coach-window #switch-variation{padding:10px 0}.coach-window #switch-options span{display:block;margin-top:4px;color:#bdd1c8;font-weight:400;line-height:1.35}
 .coach-window .plan-option strong::before{content:'●';color:#67e8b0;margin-right:7px}
-.coach-window .plan-option:nth-child(2) strong::before{color:#60a5fa}
-.coach-window .plan-option:nth-child(3) strong::before{color:#fbbf24}
+.coach-window .plan-option[data-intent=defense] strong::before{color:#60a5fa}
+.coach-window .plan-option[data-intent=attack] strong::before{color:#fbbf24}
+
+#coach-details{white-space:pre-line;line-height:1.55;color:#c8ddd0}#coach-depth{padding:8px 0}

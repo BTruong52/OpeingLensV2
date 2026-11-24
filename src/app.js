@@ -1,4 +1,11 @@
 const $ = id => document.getElementById(id);
+const adminMode=window.lens.adminMode;
+const learning=new OpeningLesson();
+const lessonSide=()=>mode()==='both'?(flipped?'b':'w'):mode();
+document.title=adminMode?'Opening Lens (Admin)':'Opening Lens';
+document.querySelector('header .eyebrow').textContent=adminMode?'OPENING LENS (ADMIN) · CONTINUOUS COACH':'OPENING LESSON · LEARN THEN PLAY';
+$('show-bubbles').checked=localStorage.getItem('lens-bubbles')!=='off';
+$('show-bubbles').onchange=()=>{localStorage.setItem('lens-bubbles',$('show-bubbles').checked?'on':'off');render();};
 const levels=['Beginner','Intermediate','Hard','Expert'];
 const lessons = [
   { name:'Italian Game', intro:'Develop naturally, contest the center, and aim your bishop at f7.', lines:[
@@ -43,7 +50,7 @@ const lessons = [
 let blackDefenseChosen=false;
 let blackDefenseName='';
 const mode=()=>$('playing-side').value;
-const turnToCoach=()=>mode()==='both' || mode()===fen?.split(' ')[1];
+const turnToCoach=()=>adminMode?(mode()==='both' || mode()===fen?.split(' ')[1]):lessonSide()===fen?.split(' ')[1];
 const pickingBlackDefense=()=>mode()==='b' && fen?.split(' ')[1]==='b' && !blackDefenseChosen && hasBookChoices();
 let fen, initialFen, selected=false, flipped=false, moves=[], index=0, study, lineIndex=0, running=false, baseline, timer, busy=false, pending='', stable=0, epoch=0;
 let departure=null, coachingStopped=false, uncertain=false, missedFrames=0;
@@ -57,7 +64,7 @@ let onlineResult=null, onlineRequest=null, onlineVersion=0;
 const requestMasters=(position,token)=>window.lens.onlineMasters(position,token);
 window.lensDebug.stateProvider=()=>({fen,initialFen,running,uncertain,flipped,side:mode(),skill:$('skill').selectedOptions[0]?.textContent,
   opening:study?.name || external?.name,index,lineLength:moves.length,moveListSelected,listStable,listBaseline,listCandidate,
-  selected,coachPending:Boolean(coached?.pending),coachMove:coached?.result?.move?.san,
+  selected,edition:adminMode?'admin':'learning',lessonPhase:learning.phase,lessonEndPly:learning.endPly,coachPending:Boolean(coached?.pending),coachMove:coached?.result?.move?.san,
   status:$('status').textContent,captureState:$('capture-state').textContent});
 function verifyTrackedBoard(before,after,beforeFen,afterFen,orientation,options={}){
   return verifyBoardPosition(before,after,beforeFen,afterFen,orientation,{...options,
@@ -84,18 +91,20 @@ function setFen(next) {
     $('online-results').replaceChildren();
     $('online-note').textContent='';
   }
+  if(fen!==next){window.lens.paint({flipped,arrows:[],highlights:[]});}
   fen=next; $('fen').value=fen;
 }
 async function chooseLesson() {
   pause(); study=lessons[Number($('lesson').value)]; lineIndex=0;
   external=null;
   coachingStopped=false; departure=null; uncertain=false;
-  $('intro').textContent=study.intro; $('game-info').textContent='Illustrative study lines. Import a PGN for a recorded match.';
+  $('intro').textContent=study.intro; $('game-info').textContent='Guided opening lesson. Learn the ideas, then continue independently.';
   await chooseLine(0,true,true);
 }
 function chooseLine(n, reset=false, remember=false) {
   const parsed=study.lines[n];
   lineIndex=n; moves=parsed.moves; initialFen=parsed.initial;
+  if(reset || remember || !learning.endPly)learning.reset(moves,true);
   if(remember)preferredOpening={study,lineIndex:n};
   if(reset){index=0;setFen(initialFen);}
   else syncIndex();
@@ -130,7 +139,7 @@ function switchVariation({lesson,variation}) {
 function renderSuggestions() {
   const container=$('suggestions');
   container.replaceChildren();
-  $('skill-section').hidden=(!study && !external?.catalog) || coachingStopped;
+  $('skill-section').hidden=(!adminMode && learning.phase==='complete') || (!study && !external?.catalog) || coachingStopped;
   if($('skill-section').hidden)return;
   if(uncertain){
     $('suggestion-note').textContent='Opening suggestions will return when the board position is confirmed.';
@@ -182,6 +191,7 @@ function variationReason(name,move,plan=''){
   return 'This is a known continuation from the current position, so you can keep studying without undoing moves.';
 }
 function positionPlans(){
+  if(!adminMode)return [];
   if(!canCoach() || !sameCoach(coached) || !coached.result?.fallback || moves[index])return [];
   const primary=coached.result.move;
   const same=plan=>plan.move.from===primary.from && plan.move.to===primary.to && plan.move.promotion===primary.promotion;
@@ -191,8 +201,9 @@ function positionPlans(){
 function coachVariations(){
   const plans=positionPlans();
   if(plans.length){
-    return plans.map(plan=>({id:'plan:'+plan.move.from+plan.move.to+(plan.move.promotion||''),
-      name:plan.theme,move:plan.move.san,why:plan.reason,plan}));
+    return plans.map((plan,index)=>({id:'plan:'+plan.move.from+plan.move.to+(plan.move.promotion||''),
+      name:plan.theme,move:plan.move.san,why:plan.reason,plan,
+      intent:index===0?'recommended':plan.move.captured || /[+#]/.test(plan.move.san)?'attack':'defense'}));
   }
   if(uncertain || coachingStopped || !turnToCoach() || (!pickingBlackDefense() && !departure && index>=0))return [];
   const selected=study?{lesson:lessons.indexOf(study),variation:lineIndex}:null;
@@ -236,7 +247,10 @@ window.lens.onCoachVariation(({position,id})=>{
   if(choice)safely(()=>chooseVariation(choice));
 });
 function render() {
-  const move=!coachingStopped && !uncertain && !departure && index>=0 ? moves[index]:null;
+  if(!adminMode && !uncertain)learning.update(fen);
+  if(!adminMode && learning.phase==='complete' && !uncertain){renderLessonComplete();return;}
+  const transitioning=!adminMode && learning.phase==='transition';
+  const move=!transitioning && !coachingStopped && !uncertain && !departure && index>=0 ? moves[index]:null;
   const catalogEnd=canContinue();
   $('opening').textContent=(study?.name || external?.name || 'Imported game').toUpperCase();
   const named=catalogKey===fen.split(' ').slice(0,4).join(' ') && catalogData?.name;
@@ -311,15 +325,22 @@ function render() {
     $('book-notice').textContent='Choose one idea and reassess after your opponent’s reply.';
     $('plan-preview').textContent='Alternative next moves · '+plans.map(plan=>plan.move.san).join(' / ');
   }
-  arrows.push(...plans.slice(1).map((plan,index)=>({from:plan.move.from,to:plan.move.to,alternative:index+1})));
+  arrows.push(...plans.slice(1).map((plan,index)=>({from:plan.move.from,to:plan.move.to,alternative:index+1,intent:plan.move.captured || /[+#]/.test(plan.move.san)?'attack':'defense'})));
   const explanation=$('explanation').textContent;
   const ideas=arrow?illustratedMove(arrow,arrow===move && study?.name==='Italian Game',explanation):[];
   arrows.push(...ideas);
   if(review)arrows.push({from:review.from,to:review.to,review:true});
-  window.lens.paint({flipped,arrows,highlights:arrow ? [arrow.from,arrow.to]:[]});
+  if(transitioning){
+    $('next-move').textContent=arrow?'The opening is complete! · '+arrow.san:turnToCoach()?'Preparing your final transition move…':'The opening is complete!';
+    $('book-notice').textContent='One final move to connect this opening to the middlegame, then you continue independently.';
+    if(arrow)learning.offer(fen);
+  }
+  const occupied=fen.split(' ')[0].replaceAll('/','').replace(/[1-8]/g,n=>'.'.repeat(+n)).split('').flatMap((p,i)=>p==='.'?[]:[String.fromCharCode(97+i%8)+(8-Math.floor(i/8))]);
+  const bubble=arrow && $('show-bubbles').checked?{from:arrow.from,to:arrow.to,text:quickExplanation(arrow,explanation,review)}:null;
+  window.lens.paint({flipped,arrows,highlights:arrow ? [arrow.from,arrow.to]:[],occupied,bubble});
   window.lens.publishCoach({
     fen,usable:Boolean(arrow && !uncertain),opening:plans.length?'Position plan · '+(fen.split(' ')[1]==='b'?'Black':'White')+' to move':mode()==='b' && blackDefenseName && Number(fen.split(' ')[5])<=2 ? blackDefenseName : $('opening').textContent,move:arrow?.san,
-    explanation,review:review?.reason,variations:coachVariations().map(({id,name,move,why})=>({id,name,move,why})),
+    explanation,details:[study?.intro || external?.idea,explanation,review?.reason,openingGoals(fen,lessonSide(),study?.lines[lineIndex]?.idea || external?.idea)].filter(Boolean).join('\n\n'),phase:adminMode?'admin':learning.phase,review:review?.reason,variations:coachVariations().map(({id,name,move,why,intent})=>({id,name,move,why,intent})),
     departure:!uncertain && !coachingStopped && departure ? departure.san : null,
     pickingDefense:pickingBlackDefense(),planning:Boolean(plans.length)
   });
@@ -328,12 +349,26 @@ function render() {
   showCatalogPosition();
   if(catalogEnd) extendCatalogLine();
 }
+function renderLessonComplete(){
+  if(!learning.summary)learning.summary=openingGoals(fen,lessonSide(),study?.lines[lineIndex]?.idea || external?.idea);
+  $('opening').textContent=study?.name || external?.name || 'Opening lesson';
+  $('next-move').textContent='The opening is complete!';
+  $('explanation').textContent='You’re ready to continue independently.';
+  $('coach-note').textContent=learning.summary;
+  for(const id of ['plan-preview','review-note','book-notice','position-name'])$(id).textContent='';
+  for(const id of ['book-options','variations','catalog-next'])$(id).replaceChildren();
+  $('previous').disabled=true;$('next').disabled=true;$('skill-section').hidden=true;
+  window.lens.paint({flipped,arrows:[],highlights:[]});
+  window.lens.publishCoach({fen,usable:false,opening:$('opening').textContent,explanation:'The opening is complete! You’re ready to continue independently.',details:learning.summary,phase:'complete',variations:[]});
+  window.lensDebug.updateState();
+}
 function showContinuation(line){
   $('plan-preview').textContent=line.length>1
     ? 'Example continuation: '+line.map(m=>`${m.before.split(' ')[5]}${m.color==='w'?'.':'…'} ${m.san}`).join(' → ')+'. The reply can differ.'
     : '';
 }
 function canCoach(){
+  if(!adminMode && learning.phase==='complete')return false;
   return Boolean(fen && (study || external) && !coachingStopped && !uncertain && turnToCoach() && !pickingBlackDefense());
 }
 function hasBookChoices(){
@@ -342,7 +377,7 @@ function hasBookChoices(){
     (catalogKey===positionKey(fen) && Boolean(catalogData?.next.length));
 }
 function sameCoach(request){
-  return request?.fen===fen && request.moves===moves;
+  return request?.fen===fen && request.moves===moves && (adminMode || request.phase===learning.phase);
 }
 function renderCoach(bookMove){
   const note=$('coach-note');
@@ -351,7 +386,7 @@ function renderCoach(bookMove){
     if(uncertain)note.textContent='The Coach will resume after the position is confirmed.';
     return null;
   }
-  if(index>=0 && !bookMove && (catalogKey!==positionKey(fen) || !catalogData || catalogData.next.length))return null;
+  if(adminMode && index>=0 && !bookMove && catalogKey===positionKey(fen) && catalogData?.next.length)return null;
   if(!sameCoach(coached))analyzePlan();
   if(coached.pending){
     note.textContent='Coach is checking the opening plan…';
@@ -383,7 +418,7 @@ function renderCoach(bookMove){
   return move;
 }
 async function analyzePlan(){
-  const request={fen,moves,pending:true};
+  const request={fen,moves,pending:true,phase:learning.phase};
   coached=request;
   let refresh,usual;
   try {
@@ -398,7 +433,7 @@ async function analyzePlan(){
       const cell=(8-Number(move.from[1]))*8+move.from.charCodeAt(0)-97;
       return move.color===turn && pieces[cell]===(turn==='w'?move.piece.toUpperCase():move.piece);
     });
-    request.result=await window.lens.coachPosition(request.fen,request.moves.slice(0,16),online,false,usual);
+    request.result=await window.lens.coachPosition(request.fen,request.moves.slice(0,16),online,false,usual,!adminMode && (learning.phase==='transition' || !moves[index]));
   }
   catch {request.error='The Coach could not complete the tactical check.';}
   finally {
@@ -423,6 +458,7 @@ function addChoice(parent,label,action){
 }
 async function loadExternal(parsed,entry,reset=false){
   study=null;external=entry;initialFen=parsed.initial;moves=parsed.moves;
+  if(reset || !learning.endPly)learning.reset(moves,false);
   coachingStopped=false;uncertain=false;departure=null;
   syncIndex();
   if(reset || index<0){pause();index=0;setFen(initialFen);}
@@ -435,6 +471,7 @@ async function loadCatalogLine(entry,browse=false){
   const parsed=await window.lens.chess('pgn',entry.pgn);
   if(!browse && fen!==before)return;
   const selectedLine={name:entry.name,catalog:true,idea:'Follow this named sequence from the Lichess opening catalog.',source:`ECO ${entry.eco} · Lichess opening catalog`};
+  learning.reset(parsed.moves,false);
   preferredOpening={parsed,external:selectedLine};
   await loadExternal(parsed,selectedLine);
 }
@@ -463,6 +500,7 @@ async function extendCatalogLine(){
   } finally { if(extending===request)extending=null; }
 }
 function canContinue(){
+  if(!adminMode)return false;
   return Boolean(study || external?.catalog) && index===moves.length && !coachingStopped && !uncertain && !departure && turnToCoach() && !pickingBlackDefense();
 }
 async function extendOnline(fetchMoves=requestMasters){
@@ -718,16 +756,11 @@ async function moveListLoop(token,sample=window.lens.trackingFrame,read=window.l
         window.lensDebug.record('Move inference',{frameId:frame.id,fen,changed,move:move?.san,verified:Boolean(verified)});
         let matched;
         if(verified){
-          try{
-            matched=await matchScreenList(token,anchor=>read(anchor,frame.id,true),true,{image,move});
-          }catch(error){
-            if(!running || token!==epoch)return;
-            // A unique legal move with matching piece shapes is independently
-            // confirmed by two stable board frames when the text is unclear.
-            followMove(move,false);
-            window.lensDebug.record('Board-only recovery',{frameId:frame.id,move:move.san,fen:move.after,ocrError:error.message});
-            matched={image,signature:current,frameId:frame.id,boardVerified:true,detected:move.san};
-          }
+          // A changed move panel plus two stable, matching piece frames is
+          // sufficient evidence. Keep OCR off the latency-critical path.
+          followMove(move,false);
+          window.lensDebug.record('Fast board confirmation',{frameId:frame.id,move:move.san,fen:move.after,ocrSkipped:true});
+          matched={image,signature:current,frameId:frame.id,boardVerified:true,ocrSkipped:true,detected:move.san};
         }else{
           // Opponent and user can both move between samples. Recover a unique
           // short legal path from occupancy, then require strict piece evidence.
@@ -756,9 +789,9 @@ async function moveListLoop(token,sample=window.lens.trackingFrame,read=window.l
           return;
         }
         baseline=matched.image;listBaseline=matched.signature || current;uncertain=false;
-        showCapturedBoard(frame.board,matched.boardVerified?'Board move confirmed · move text unclear.':'Position confirmed.');
-        setMoveListState(matched.boardVerified?'waiting':'readable',matched.boardVerified
-          ?`Board verified · ${matched.detected}. Move text unclear; checking both inputs.`
+        showCapturedBoard(frame.board,matched.boardVerified?'Board move confirmed · move-panel change detected.':'Position confirmed.');
+        setMoveListState('readable',matched.boardVerified
+          ?`Board verified · ${matched.detected}. Watching the move panel for changes.`
           :`Move list readable · board confirmed · ${matched.detected}.`);
         render();status(matched.boardVerified?`Tracked ${matched.detected} from the stable board. Watching both inputs.`:`Following ${matched.detected}.`);
       }catch(error){
@@ -771,80 +804,65 @@ async function moveListLoop(token,sample=window.lens.trackingFrame,read=window.l
     }
   }catch(error){
     if(token!==epoch)return;
-    pause();uncertain=true;render();status('Move-list tracking stopped. Reselect the crop or switch to board tracking.');
-    window.lensDebug.record('Capture loop stopped',{fen,error:error.message},true);
-    return;
+    uncertain=true;render();status('Capture temporarily unavailable. Retrying automatically.');
+    window.lensDebug.record('Capture loop retry',{fen,error:error.message},true);
   }
   if(running && token===epoch)timer=setTimeout(()=>moveListLoop(token),160);
 }
 async function captureLoop(token, grab=window.lens.capture) {
   if(!running || token!==epoch)return;
   try {
-    const capture=await grab();
-    const current=await fingerprints(capture);
+    const capture=await grab(),current=await fingerprints(capture);
     if(!running || token!==epoch)return;
     showCapturedBoard(capture);
     const changed=changedPieceCells(baseline,current).map(square).sort();
-    const signature=changed.join(','); stable=signature===pending?stable+1:1;pending=signature;
-    if(changed.length && stable>=2) {
-      const move=await window.lens.chess('infer',{fen,changed});
-      if(!running || token!==epoch)return;
-      if(move) {
-        baseline=current;pending='';stable=0;uncertain=false;missedFrames=0;
-        followMove(move);status(`Tracked ${move.san}.`);
-        showCapturedBoard(null,'Board move confirmed.');
-        timer=setTimeout(()=>captureLoop(token),700);
-        return;
-      }
-    }
-    if(changed.length) {
+    const signature=changed.join(',');
+    stable=signature===pending?stable+1:1;pending=signature;
+    if(changed.length){
       missedFrames++;
-      if(missedFrames>=6) {
-        if(stable>=2){
+      if(!uncertain){uncertain=true;render();}
+      if(stable>=2 && (stable===2 || stable%4===0)){
+        let path=null;
+        const candidates=await window.lens.chess('board-candidates',{fen,changed});
+        if(!running || token!==epoch)return;
+        const supported=candidates.filter(move=>verifyTrackedBoard(baseline,current,fen,move.after,flipped,{boardRecovery:true}));
+        if(supported.length===1)path=supported;
+        if(!path){
           const scores=current.map(energy);
-          const recovered=await window.lens.chess('recover',{fen,scores:flipped?scores.reverse():scores});
+          const paths=await window.lens.chess('recover-candidates',{fen,scores:flipped?scores.reverse():scores});
           if(!running || token!==epoch)return;
-          if(recovered){
-            baseline=current;pending='';stable=0;uncertain=false;missedFrames=0;
-            recovered.forEach(move=>followMove(move,false));
-            render();
-            showCapturedBoard(null,'Position recovered and confirmed.');
-            status(`Recovered ${recovered.map(move=>move.san).join(', ')}. Tracking is back in sync.`);
-            timer=setTimeout(()=>captureLoop(token),700);
-            return;
+          const verified=(paths || []).filter(moves=>verifyTrackedBoard(baseline,current,fen,moves.at(-1).after,flipped,{boardRecovery:true}));
+          if(verified.length===1)path=verified[0];
+        }
+        if(path){
+          path.forEach(move=>followMove(move,false));
+          baseline=current;pending='';stable=0;uncertain=false;missedFrames=0;
+          render();showCapturedBoard(null,'Board position confirmed.');
+          status(`Tracked ${path.map(move=>move.san).join(' → ')}. Watching for the next move.`);
+          window.lensDebug.record('Board position accepted',{fen,moves:path.map(move=>move.san)});
+        }else if(moveListSelected){
+          const result=await matchScreenList(token,window.lens.captureMoveList,true);
+          if(!running || token!==epoch)return;
+          if(result && !result.waiting){
+            baseline=result.image;pending='';stable=0;uncertain=false;missedFrames=0;
+            render();status(`Resynced from the ${result.detected}.`);
           }
+        }else{
+          status('Catching up with the board… Select the optional move panel to recover longer sequences.');
+          window.lensDebug.record('Board resync pending',{fen,changed},true);
         }
-        let listError='';
-        if(moveListSelected){
-          try{
-            status('Reading the move list to recover the position…');
-            const result=await matchScreenList(token);
-            if(!running || token!==epoch)return;
-            if(result && !result.waiting){
-              baseline=result.image;pending='';stable=0;uncertain=false;missedFrames=0;
-              render();status(`Resynced from the ${result.detected}.`);
-              timer=setTimeout(()=>captureLoop(token),700);
-              return;
-            }
-          }catch(error){listError=' '+error.message.replace(/^Error invoking remote method '[^']+': Error: /,'');}
-          if(!running || token!==epoch)return;
-        }
-        pause();uncertain=true;render();
-        showCapturedBoard(capture);$('preview').open=true;
-        const cells=changed.length>8 ? `${changed.length} squares` : changed.join(', ');
-        status(`Tracking paused: changes at ${cells} did not match one legal move.${listError} Reselect the board if it moved, or correct the position.`);
-        return;
       }
-      if(missedFrames===1)status('Board in motion. Waiting for the next confirmed move…');
-    } else {
-      const hadMotion=missedFrames>0;
+    }else{
       missedFrames=0;
+      if(uncertain){uncertain=false;render();status('Board is back at the confirmed position.');}
       showCapturedBoard(null,'Position confirmed.');
-      if(uncertain) { uncertain=false;render();status('Board is back at the last tracked position.'); }
-      else if(hadMotion)status('Board is unchanged. Tracking is on.');
     }
-  } catch(e){ if(token===epoch){pause();uncertain=true;render();status(`Tracking stopped: ${e.message}`);} }
-  if(running && token===epoch)timer=setTimeout(()=>captureLoop(token),700);
+  }catch(error){
+    if(token!==epoch)return;
+    uncertain=true;render();status(`Retrying tracking: ${error.message}`);
+    window.lensDebug.record('Board tracking retry',{fen,error:error.message},true);
+  }
+  if(running && token===epoch)timer=setTimeout(()=>captureLoop(token),250);
 }
 $('select').onclick=()=>safely(async()=>{pause();await window.lens.selectBoard(Number($('monitor').value));});
 $('select-move-list').onclick=()=>safely(async()=>{pause();await window.lens.selectBoard(Number($('monitor').value),'moves');});
@@ -894,6 +912,7 @@ $('playing-side').onchange=()=>{blackDefenseChosen=false;blackDefenseName='';if(
 $('previous').onclick=()=>safely(()=>step(-1)); $('next').onclick=()=>safely(()=>step(1));
 $('restart').onclick=()=>safely(async()=>{
   if(!initialFen)return;
+  learning.reset(moves,Boolean(study));
   pause();index=0;departure=null;coachingStopped=false;uncertain=false;missedFrames=0;pending='';stable=0;
   blackDefenseChosen=false;blackDefenseName='';
   await window.lens.clearMoveList();
@@ -913,7 +932,7 @@ $('restart').onclick=()=>safely(async()=>{
   }
   status(`New game ready · ${study?.name || external?.name || 'Starting position'}. Reset the website board too, then calibrate to track it.`);
 });
-$('import').onclick=()=>safely(async()=>{
+if($('import'))$('import').onclick=()=>safely(async()=>{
   pause();const parsed=await window.lens.importPgn();if(!parsed)return;
   study=null;external=null;moves=parsed.moves;index=0;initialFen=parsed.initial;departure=null;coachingStopped=false;uncertain=false;setFen(initialFen);
   const h=parsed.headers;
@@ -1104,7 +1123,7 @@ async function toggleTracking(grab=window.lens.capture,forceList=false,readList=
   } finally {busy=false;$('track').disabled=false;}
 }
 $('track').onclick=()=>safely(toggleTracking);
-$('open-stream-view').onclick=()=>safely(()=>window.lens.openStreamView());
+
 (async()=>{
   window.lens.catalog('summary').then(({count,positions})=>{$('catalog-summary').textContent=`Offline opening catalog · ${count.toLocaleString()} lines · ${positions.toLocaleString()} positions`;}).catch(error=>{$('catalog-position').textContent=error.message;});
   traps.forEach(trap=>addChoice($('trap-list'),trap.name,()=>loadTrap(trap,0)));

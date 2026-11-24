@@ -55,6 +55,37 @@ function detectBoards(width,height,get,verticalPitchRatio=1) {
     if(found.some(r=>r.x===x && y>=r.y && y<r.y+r.height))break;
     }
   }
-  return found;
+  // Fit the seven INTERNAL boundaries. Rounded corners can shorten an outer
+  // run by several pixels; using that run as the crop shifts every square.
+  function refine(rect,vertical){
+    const start=vertical?rect.y:rect.x,pitch=(vertical?rect.height:rect.size)/8;
+    const other=vertical?rect.x:rect.y,otherPitch=(vertical?rect.size:rect.height)/8;
+    const points=[];
+    for(let k=1;k<8;k++){
+      let best=null;
+      for(let p=Math.round(start+k*pitch-pitch*.18);p<=start+k*pitch+pitch*.18;p++){
+        let votes=0;
+        for(let cell=0;cell<8;cell++)for(const offset of [.06,.94]){
+          const q=Math.floor(other+(cell+offset)*otherPitch);
+          const sample=t=>vertical?get(q,t):get(t,q);
+          const a=sample(p-3),b=sample(p+2);
+          if(distance(a,b)<23)continue;
+          if(distance(a,sample(p-1))<13 && distance(b,sample(p))<13)votes++;
+        }
+        if(!best || votes>best.votes || votes===best.votes && Math.abs(p-start-k*pitch)<Math.abs(best.p-start-k*pitch))best={p,votes};
+      }
+      if(best?.votes>=4)points.push({k,p:best.p});
+    }
+    if(points.length<4)return [start,pitch*8];
+    const n=points.length,sx=points.reduce((s,v)=>s+v.k,0),sy=points.reduce((s,v)=>s+v.p,0);
+    const slope=(n*points.reduce((s,v)=>s+v.k*v.p,0)-sx*sy)/(n*points.reduce((s,v)=>s+v.k*v.k,0)-sx*sx);
+    const origin=(sy-slope*sx)/n;
+    if(points.some(v=>Math.abs(v.p-origin-v.k*slope)>2) || Math.abs(slope-pitch)>pitch*.06)return [start,pitch*8];
+    return [Math.round(origin),Math.round(slope*8)];
+  }
+  return found.map(rect=>{
+    const [x,size]=refine(rect,false),[y,height]=refine({...rect,x,size},true);
+    return {x,y,size,height};
+  });
 }
 module.exports={detectBoards};

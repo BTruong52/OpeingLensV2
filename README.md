@@ -1,24 +1,23 @@
-# OpeingLensV3
-
-Opening Lens v3.0.0: a Windows chess opening coach with on-board arrows, automatic screen calibration, move-panel recognition, skill-based opening suggestions, and a floating Coach.
-
-## Download for Windows
-
-**[Download the latest tester build](../../releases/latest)**. In Assets, choose `OpeingLensV3-Windows-x64.zip`.
-
-Extract the **entire ZIP** and run **OpeingLensV3.exe**. No Node.js or installation is required for the portable build. Read `READ FIRST.txt` inside the download. Windows 10 (2004+) / Windows 11 x64; unsigned test build.
-
-For Discord, open **Streaming > Discord > Open Stream View** and share the **Opening Lens Stream View** window. Place it outside the captured board and move panel, preferably on a second monitor.
-
-## Report problems
-
-Enable **Developer Mode**, reproduce the issue, then export diagnostics. Review the captured images before attaching a report to an issue. Include Windows version, monitor scaling, playing color, moves played, and expected versus actual behavior. Never include access tokens or account details.
-
-Recognition can vary by board theme, move notation, scrolling and animation. Use the Coach on analysis boards or where assistance is allowed.
-
-## Development and feature documentation
+# Opening Lens
 
 A Windows desktop prototype that draws click-through arrows and highlights directly over a chess board in another app or website. Screen processing and the opening catalog are local. The optional online explorer sends the current chess position to Lichess on request.
+
+## Windows tester download
+
+[Download OpeingLensV4](https://github.com/BTruong52/OpeingLensV2/releases/tag/v4.0.0). Extract the entire ZIP. Run **OpeingLensV4.exe** for the learning version or **Opening Lens (Admin).cmd** for continuous coaching. Neither requires Node.js or an administrator account. Read **READ FIRST.txt** before testing.
+
+This build includes on-board explanation bubbles, deeper Coach explanations, a final learning handoff, faster tracking/recovery, and expanded diagnostics. The proposed interactive opening slideshow, hints-before-arrows, understanding questions, and post-game variation review are not implemented in this build.
+
+## Learning and Admin editions
+
+- **Opening Lens**: launch `Launch.cmd` (or `npm start`). Teach the selected opening setup, offer one engine-checked transition move on the learner’s turn, then retain a plan summary with no further move arrows. Reset for a new game or explicitly choose another lesson to start again.
+- **Opening Lens (Admin)**: launch `Launch Admin.cmd` (or `npm run start:admin`). Keep continuous move-by-move coaching, catalog extensions, and position-plan alternatives.
+
+Both editions use the same board/move-panel tracking. They are separate launch modes, not duplicated projects. Admin is an edition label and does not request Windows administrator access.
+
+The first learning release uses bounded lesson endpoints: guided setups cover at least four full moves, up to the selected line’s endpoint (capped at eight full moves); arbitrary catalog lessons have a six-to-ten-full-move window. This marks the **lesson** endpoint, not the end of all opening theory. A deviation does not stop the lesson immediately. The next recommendation after that window is the final transition; after the learner makes a move, recommendation arrows and bubbles stop. If calibration starts beyond the window, the transition is offered from the confirmed current position.
+
+A click-through bubble near the arrow explains the current move briefly. **Show quick explanations on the board** toggles it and remembers the preference. Placement avoids occupied piece areas, the move’s origin/destination, and screen edges in either orientation. When no clear space can fit the bubble, it stays hidden and the Coach retains the explanation. The deeper Coach includes the opening’s purpose, the current reason, relevant reviewed threat, and development/king-safety goals. Bubbles are excluded from OLens’s underlying-window recognition captures.
 
 ## Run
 
@@ -29,7 +28,7 @@ npm install
 npm start
 ```
 
-After installing dependencies, double-click **Launch.cmd** to launch from source.
+Dependencies are installed in this workspace. Double-click **Launch.cmd** to open the prototype.
 
 In this workspace, npm was bootstrapped locally, so you can also use:
 
@@ -40,11 +39,12 @@ node .tools/package/bin/npm-cli.js start
 ## First study
 
 1. Open an analysis board or recorded game on your preferred website. Put the coach beside the board or on another monitor.
-2. Click **Auto-find board & calibrate** with one full board visible. Opening Lens scans the connected monitors for a flat 8×8 grid and calibrates when exactly one likely board is found. If there is no unique result, choose **Monitor with the chessboard**, then click **Select board on screen** and drag across the 64 squares. Exclude labels and borders. Escape cancels selection. Set the correct orientation before calibrating.
-3. Set **Black pieces at the bottom** if needed.
+2. Click **Auto-find board & calibrate** with one full board visible. Opening Lens scans the connected monitors for a flat 8×8 grid and calibrates when exactly one likely board is found. If there is no unique result, choose **Monitor with the chessboard**, then click **Select board on screen** and drag across the 64 squares. Exclude labels and borders. Escape cancels selection. Confirm or adjust both crop boxes before calibrating. RoChess move panels can be found from numbered rows even without a Moves heading.
+3. Check the detected bottom color and **Playing as** setting; adjust **Black pieces at the bottom** if necessary.
 4. Choose an opening and variation. Mint arrows show its next move. The website remains clickable through the overlay. Use **Next move** and **Back** while separately stepping the website replay to the same position.
-5. If you selected manually or need to retry, click **Calibrate & start tracking**. The coach and arrows briefly hide, then return. When one position clearly matches, the coach shows the detected opening and last move, and draws the next arrow. If calibration fails, inspect **Check captured board**; for unsupported or ambiguous positions, paste the position’s FEN under **Correct position**, click **Apply position & pause**, and calibrate again. Keep the coach off the board for continuous tracking and wait for each move to register.
-6. **Import real game · PGN** loads a game’s main line and displays its player/event metadata. Use a PGN containing one game. Supply your own downloaded game; built-in opening lines are teaching examples, not claimed historical matches.
+5. If you selected manually, click **Calibrate & start tracking**. The main control panel hides for calibration, then returns. The floating Coach opens automatically. Inspect **Check captured board** if the crop looks wrong.
+6. Select the optional **Move panel on screen** in section 01 if it was not found automatically. Include numbered rows and blank space for new moves, keeping the newest rows visible. Use **Advanced → Correct position · FEN** when a position cannot be confirmed.
+7. Press **Reset for new game** for every new game, then calibrate again. The app keeps your chosen opening and skill level; reselect the optional move panel after reset.
 
 **Ctrl+Shift+Space** hides/shows the drawings. Closing the control panel closes the overlay.
 
@@ -56,9 +56,9 @@ Off-book coaching considers legal moves that reflect the selected line’s openi
 
 Try **Italian Game** with `1. e4 c6 2. d4 Qa5+`: the Coach recommends `3. c3` to block the check and support `d4`, and flags `Nf3` as illegal in that position.
 
-The floating Coach opens automatically after successful calibration. It shows one explanation for the current move and replaces it as the position changes. Green arrows show the move to play; dashed amber arrows illustrate the idea; dashed red arrows show a move to avoid. Read-aloud is optional. The Coach and arrows stay on screen during tracking and are excluded from screen capture on supported Windows versions.
+The floating Coach opens automatically after successful calibration. It shows one explanation for the current move and replaces it as the position changes. Green arrows show the move to play; dashed amber arrows illustrate the idea; dashed red arrows show a move to avoid. Read-aloud is optional. The Coach and arrows stay visible during tracking. On Windows, OLens reads a continuous video of the underlying game/browser window, so its own arrows and Coach do not contaminate recognition.
 
-To include coaching in a Discord stream, open **Streaming · Discord → Open Stream View**, then choose **Opening Lens Stream View** as the window to share in Discord. This shareable window combines the captured chessboard, correctly oriented arrows, and current Coach explanation. It shows the board and coaching rather than the entire game interface. Keep tracking running and place Stream View on another monitor or outside both capture areas. OLens refuses to capture through an overlapping Stream View to prevent feedback. The view reuses existing tracking captures; it does not run a second capture or analysis loop. Sharing the game window alone will not include the separate OLens windows.
+To include coaching in Discord, share the **desktop screen / monitor** containing the board and Coach. The overlay windows are capture-visible; the separate Stream View has been removed. Sharing only the game window does not include separate desktop overlays. Automated tests verify that visible arrows and an overlapping Coach are absent from OLens's own capture; an actual Discord viewer session still needs checking on the tester's setup.
 
 In **02 / Skill Level & Openings**, set **Playing as → Black** to get up to three distinct replies after White's first move. The Coach ranks guided defenses by your skill level and uses catalog replies to fill gaps. Choose a defense in the floating Coach or the main panel. Only your turns get recommendation arrows; board orientation is a separate setting. **Study both sides** keeps the original replay behavior.
 
@@ -74,21 +74,21 @@ Choose **Beginner**, **Intermediate**, **Hard** or **Expert** under **Opening op
 
 ## Optional screen move list
 
-**Auto-find board & calibrate** scans the connected screens, then opens a preview on the monitor with the detected board. The green box is the board. If the app finds a **Moves** heading beside it, the amber box is the proposed move-panel crop. Drag a box to move it or use its lower-right handle to resize it. If no panel was detected, use **Draw move panel** or skip it. **Confirm & calibrate** applies the boxes; **Cancel** keeps the previous selection.
-     
-1. In **01 / Select Board**, select the chessboard, then expand **Move panel · optional**.
+**Auto-find board & calibrate** scans the connected screens, then opens a preview on the monitor with the detected board. The green box is the board. If the app finds numbered move rows or a **Moves** heading beside it, the amber box is the proposed move-panel crop. Drag a box to move it or use its lower-right handle to resize it. If no panel was detected, use **Draw move panel** or skip it. **Confirm & calibrate** applies the boxes; **Cancel** keeps the previous selection.
+
+1. In **01 / Select Board**, select the chessboard, then use the visible **Move panel** controls.
 2. Click **Select move panel on screen** once and drag around the panel, including blank space for future rows. You can include the **Moves** heading. Keep move 1 visible for initial calibration and exclude clocks and navigation buttons.
 3. Opening Lens checks the crop automatically. **Move list readable** means one legal position from the list matched the captured board. **Waiting for the first move** means it recognized an empty move panel; **Needs attention** means the crop or the position could not be confirmed. If watching is enabled, it follows changes automatically. **Reset for new game** clears the move-panel selection and keeps the chessboard region.
-     
-When **Watch the move list instead of the board** is checked, the app polls the list crop and reads it only after a change has settled. The chessboard is captured again to confirm any new position, so a slow drag alone does not trigger move analysis. Uncheck it for board tracking with OCR as a fallback. The reader accepts regular algebraic notation and coordinate notation such as `e2.e4`. Small piece icons and low-contrast text can still be misread; use letter or coordinate notation if the site offers it. OCR runs locally.
+
+When **Use the board and move panel together** is checked, the app polls the list crop and reads it only after a change has settled. The chessboard is captured again to confirm any new position, so a slow drag alone does not trigger move analysis. Uncheck it for board tracking with OCR as a fallback. The reader accepts regular algebraic notation and coordinate notation such as `e2.e4`. Small piece icons and low-contrast text can still be misread; use letter or coordinate notation if the site offers it. OCR runs locally.
 
 ## What board reading means in this prototype
 
-Automatic calibration looks for piece-like texture on the same squares as one position in the built-in repertoire, or the imported game if selected. It does not identify individual pieces or independently read whose turn it is, so visually similar positions may be ambiguous or misidentified. Check the reported position before using the arrows. After calibration, the reader compares square fingerprints against the previous image. After two observations with the same changed-square set, it accepts a move only if exactly one legal move from the known FEN explains those squares. Processing is local; the preview is not saved.
+Automatic calibration looks for piece-like texture on the same squares as one position in the built-in repertoire, or the selected guided line. It does not identify individual pieces or independently read whose turn it is, so visually similar positions may be ambiguous or misidentified. Check the reported position before using the arrows. After calibration, the reader compares square fingerprints against the previous image. After stable observations, a legal move must also match piece-shape evidence. A move-panel change plus a uniquely confirmed board move bypasses OCR for speed. A unique two-half-move path can catch up when both players move between samples. Longer sequences use the changed move-panel rows and legal replay; stale OCR is discarded if new moves arrive. Recognition retries automatically rather than permanently pausing on a mismatch. Processing is local; selected crop previews are retained in the in-memory diagnostic report.
 
-This is not general piece recognition. It cannot discover an arbitrary position from a screenshot, verify the initial FEN, determine the side to move visually, or distinguish promotion pieces. Incorrect calibration can lead to incorrect tracking. Website move highlights, cursor effects, animation, small pieces and themes can interfere. Disable website move highlights if possible. Backward replay, skipped moves, promotions, resizing, scrolling, theme changes and flipping require pausing, correcting the FEN and recalibrating. It does not follow a board that moves on screen. Keep the board inside a single monitor.
+This is not general piece recognition. It cannot discover an arbitrary position from a screenshot, verify the initial FEN, determine the side to move visually, or distinguish promotion pieces. Incorrect calibration can lead to incorrect tracking. Website move highlights, cursor effects, animation, small pieces and themes can interfere. Disable website move highlights if possible. Backward replay, promotions that cannot be identified, resizing, theme changes, or flipping may require correcting the FEN and recalibrating. Fast forward play is recovered when the legal path is uniquely supported; unlimited skipped moves without readable history cannot be guaranteed. It does not follow a board that moves on screen. Keep the board inside a single monitor.
 
-During capture the drawing window briefly hides to avoid reading its own arrows; this can cause visible flicker. Screen capture and scaling require validation on the target machine and monitor configuration. Compatibility with every website is a goal, not a verified feature.
+The drawing and Coach windows do not hide during ordinary capture. Windows 10/11 capture uses a small window-bounds helper, compiled locally with the Windows .NET Framework compiler on first use. No separate Python or OCR service is needed. Screen capture and scaling require validation on the target machine and monitor configuration. Compatibility with every website is a goal, not a verified feature.
 
 Use in analysis, study, replay and other contexts where assistance is permitted.
 
@@ -96,21 +96,21 @@ Use in analysis, study, replay and other contexts where assistance is permitted.
 
 ### Developer Mode
 
-Open **Developer Mode** near the bottom of the app and enable recording. It shows selected capture areas, the actual OCR input with word-confidence boxes, raw text, reconstructed rows, parser errors, legal candidate moves, piece-match evidence, position state, monitor scaling, and timings. Recording keeps the latest 100 events and retains the last failure with its capture images.
+Open **Developer Mode** near the bottom of the app. Recording starts enabled and can be turned off. It shows selected capture areas, the actual OCR input with word-confidence boxes, raw text, reconstructed rows, parser errors, legal candidate moves, piece-match evidence, position state, monitor scaling, and timings. Recording keeps the latest 300 events and retains the latest failure plus up to three recent failure snapshots with capture images.
 
-Use **Last failure** to inspect an intermittent error. Pause tracking before using **Inspect capture now**. **Export diagnostics** saves a JSON report containing the cropped images and recognition details. Review captured regions before sharing the report. Developer Mode starts off each session.
+Use **Last failure** to inspect an intermittent error. Pause tracking before using **Inspect capture now**. **Export diagnostics** saves a JSON report containing the cropped images and recognition details. Review captured regions before sharing the report. The export also includes selected regions, monitor scaling, clean-window capture source, runtime/GPU details, arrows, Coach state, current and confirmed positions, and timings. Tokens are excluded. Only selected crops are retained; the entire desktop is not exported.
 
 ```powershell
 npm test
 npm run check
 ```
 
-Automated checks cover chess move inference, coordinate mapping and PGN parsing. The native smoke test verifies selection, overlay placement and successful desktop-capture responses on two monitors, the coach hiding and returning, inference of e4 from separately rendered test-board images, and the opening switch and stop prompts. Live website screen-to-move tracking still requires manual testing.
+Automated checks cover chess move inference, coordinate mapping and PGN parsing. The native smoke test verifies selection, overlay placement and successful desktop-capture responses on two monitors, visible Coach/arrow exclusion from the underlying game capture, inference of e4 from separately rendered test-board images, and the opening switch and stop prompts. Live website screen-to-move tracking still requires manual testing.
 
 Run the native smoke test (briefly opens test windows):
 
 ```powershell
-node node_modules/electron/cli.js . --smoke-test --user-data-dir=.tools/smoke-profile
+node node_modules/electron/cli.js . --admin --smoke-test --user-data-dir=.tools/smoke-profile
 ```
 
 ## Next steps
@@ -123,3 +123,11 @@ node node_modules/electron/cli.js . --smoke-test --user-data-dir=.tools/smoke-pr
 - Packaging into a Windows installer after native smoke testing.
 
 Architecture: Electron main process handles screen capture and native windows; an isolated renderer handles study controls and square fingerprints; chess.js supplies legal moves and PGN parsing. Electron context isolation and sandboxing are enabled; renderers have no Node.js access.
+
+## Screenshot regression cases
+
+Run `node node_modules/electron/cli.js test/multi-layout.cjs --user-data-dir=.tools/layout-test`. The supplied RoChess and Chess.com crops cover both orientations, times/badges, captures, check/checkmate, and scrolled late-game rows. The Chess.com QGD full-history cold OCR case remains unclear: its regression uses the board catch-up path with a synthetic prior fingerprint built from actual current sprites. Other cold-calibration ambiguity still requires manual confirmation/FEN.
+
+The opening catalog ships a hash-checked prepared index. Regenerate it after changing TSV data with `node -e "require('./src/catalog.cjs').buildCatalog('data/openings',{useCache:false,writeCache:true})"`. A stale index is ignored automatically.
+
+Learning end-to-end check: `node node_modules/electron/cli.js . --learning-test --user-data-dir=.tools/learning-check`. It covers bubbles, clean capture, White/Black orientation, one transition recommendation, persistent handoff, and reset.

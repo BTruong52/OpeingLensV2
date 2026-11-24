@@ -71,14 +71,14 @@ function replay(tokens,allowUnclearRank,initial=new Chess().fen()){
     const fuzzy=token.match(/^([KQRBN]?)([a-h]?[1-8]?)(x?)([a-h])([A-Za-z])([+#]?)$/);
     const rankOnly=token.match(/^~([1-8])([+#]?)$/);
     const unclear=!valid && Boolean(fuzzy || rankOnly);
-    if(!valid && (!allowUnclearRank || !unclear || corrected>=8)){
+    if(!valid && (!allowUnclearRank || !unclear || corrected>=64)){
       throw Error('The move text could not be read reliably. Enlarge it and select only the numbered move rows.');
     }
     if(unclear)corrected++;
     candidates=candidates.flatMap(line=>{
       const board=new Chess(line.moves.at(-1)?.after || initial);
       if(unclear){
-        const ranks=rankOnly?rankOnly[1]:({s:'58',S:'58',e:'68',b:'68',a:'4',d:'5'}[fuzzy[5]] || '12345678');
+        const ranks=rankOnly?rankOnly[1]:({s:'58',S:'58',e:'68',b:'68',a:'4',A:'4',d:'45',i:'1',I:'1',l:'1',T:'7'}[fuzzy[5]] || '12345678');
         const legal=board.moves({verbose:true}).filter(move=>!move.promotion && ranks.includes(move.to[1]) &&
           (rankOnly?!move.captured:move.to[0]===fuzzy[4] && Boolean(move.captured)===Boolean(fuzzy[3])) &&
           (!(rankOnly?.[2] || fuzzy?.[6]) || move.san.endsWith(rankOnly?.[2] || fuzzy[6])));
@@ -135,31 +135,37 @@ async function getWorker(){
   }
   return worker;
 }
-async function findMovesHeading(png){
+async function findPanelWords(png){
   const {PSM}=require('tesseract.js');
   const engine=await getWorker();
   try {
     await engine.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
     const {data}=await engine.recognize(png,{}, {blocks:true});
-    return (data.blocks||[]).flatMap(block=>block.paragraphs.flatMap(p=>p.lines.flatMap(line=>line.words)))
-      .filter(word=>/^moves:?$/i.test(word.text.trim())).map(word=>word.bbox);
+    return (data.blocks||[]).flatMap(block=>block.paragraphs.flatMap(p=>p.lines.flatMap(line=>line.words)));
   } finally {
     await engine.setParameters({tessedit_pageseg_mode:PSM.SINGLE_BLOCK});
   }
 }
+async function findMovesHeading(png){return (await findPanelWords(png)).filter(word=>/^moves:?$/i.test(word.text.trim())).map(word=>word.bbox);}
 async function readMoveImage(png,original,anchor,contrast,{quick=false,onPass}={}){
   const engine=await getWorker();
   const candidates=new Map();
   let failed;
   let sawEmptyPanel=false, sawText=false, sawNumberedRow=false;
-  for(const [variant,image] of [['contrast',contrast],['scaled',png],['original',original]].filter(([,image])=>image)){
+  const variants=[['contrast',contrast],['scaled',png],['original',original]].filter(([,image])=>image);
+  for(const [variant,image] of variants){
     const started=performance.now();
     const {data}=await engine.recognize(image,{}, {blocks:true});
     const words=(data.blocks || []).flatMap(block=>block.paragraphs.flatMap(paragraph=>paragraph.lines.flatMap(line=>line.words)));
+    if(variant==='contrast' && process.versions.electron){
+      const cleaned=require('./panel-image.cjs').withoutMoveTimes(image,words);
+      if(cleaned)variants.splice(1,0,['without-times',cleaned]);
+    }
     const bytes=Buffer.from(image);
     const width=bytes.length>24 && bytes.toString('ascii',1,4)==='PNG'?bytes.readUInt32BE(16):0;
-    const grid=width?moveGridText(words,width):null;
+    const grid=width?moveGridText(words,width,anchor?new Chess(anchor).moveNumber():0):null;
     const trace=onPass?{variant,text:data.text,grid,confidence:data.confidence,width,
+      ...(variant==='without-times'?{inputImage:'data:image/png;base64,'+Buffer.from(image).toString('base64')}:{}),
       height:width?bytes.readUInt32BE(20):0,words:words.map(word=>({text:word.text,confidence:word.confidence,bbox:word.bbox})),parses:[]}:null;
     sawText ||= /[A-Za-z0-9]/.test(data.text);
     sawEmptyPanel ||= /\bMoves\b|\bStarting Position\b/i.test(data.text);
@@ -192,4 +198,4 @@ async function readMoveImage(png,original,anchor,contrast,{quick=false,onPass}={
   const lines=[...candidates.values()];
   return {...lines[0],candidates:lines};
 }
-module.exports={parseMoveText,parseRows,readMoveImage,findMovesHeading};
+module.exports={parseMoveText,parseRows,readMoveImage,findMovesHeading,findPanelWords};
